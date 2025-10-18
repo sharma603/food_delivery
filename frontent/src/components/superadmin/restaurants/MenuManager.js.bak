@@ -1,0 +1,154 @@
+import React, { useState, useEffect } from 'react';
+import Header from '../../common/Header';
+
+import Table from '../../common/Table';
+import Modal from '../../common/Modal';
+import Form from '../../common/Form';
+import LoadingSpinner from '../../common/LoadingSpinner';
+import { apiService as api } from '../../../services/api';
+
+
+const MenuManager = ({ user, onLogout }) => {
+  const menuItems = [
+    { path: '/restaurant/dashboard', label: 'Dashboard', icon: '📊' },
+    { path: '/restaurant/menu', label: 'Menu Management', icon: '🍽️' },
+    { path: '/restaurant/orders', label: 'Order Tracking', icon: '📦' },
+    { path: '/restaurant/profile', label: 'Profile', icon: '👤' },
+    { path: '/restaurant/analytics', label: 'Analytics', icon: '📈' },
+  ];
+
+  const [menu, setMenu] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    fetchMenuItems();
+    fetchCategories();
+  }, []);
+
+  const fetchMenuItems = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/menu');
+      setMenu(response.items || []);
+    } catch (err) {
+      setError('Failed to fetch menu items');
+      console.error('Error fetching menu:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      console.log('🔍 Fetching categories for dropdown...');
+      const response = await api.get('/superadmin/menu/categories');
+      console.log('✅ Categories response:', response.data);
+      
+      if (response.data.success && Array.isArray(response.data.data)) {
+        const activeCategories = response.data.data.filter(cat => cat.isActive && !cat.isDeleted);
+        console.log(`📊 Found ${activeCategories.length} active categories`);
+        setCategories(activeCategories);
+      } else {
+        console.log('⚠️ No categories found or invalid response structure');
+        setCategories([]);
+      }
+    } catch (err) {
+      console.error('❌ Error fetching categories:', err);
+      console.error('❌ Error details:', err.response?.data);
+      // Don't set error for categories, just use empty array
+      setCategories([]);
+    }
+  };
+
+  const columns = [
+    { key: 'name', label: 'Item Name' },
+    { key: 'category', label: 'Category' },
+    { key: 'price', label: 'Price' },
+    { key: 'available', label: 'Available' },
+  ];
+
+  const handleAddItem = async (formData) => {
+    try {
+      const newItem = {
+        ...formData,
+        available: true,
+        restaurantId: user.id, // Assuming user.id is the restaurant ID
+      };
+
+      await api.post('/menu', newItem);
+      await fetchMenuItems(); // Refresh the menu list
+      setShowAddModal(false);
+    } catch (err) {
+      setError('Failed to add menu item');
+      console.error('Error adding menu item:', err);
+    }
+  };
+
+  const formFields = [
+    { name: 'name', label: 'Item Name', type: 'text', required: true },
+    { 
+      name: 'category', 
+      label: 'Category', 
+      type: 'select', 
+      required: true,
+      options: categories.map(cat => ({
+        value: cat._id,
+        label: cat.displayName || cat.name
+      }))
+    },
+    { name: 'price', label: 'Price', type: 'text', required: true },
+  ];
+
+  if (loading) {
+    return (
+      <div className="menu-manager">
+        <Header user={user} onLogout={onLogout} title={`${user.name} - Menu`} />
+        
+        <main className="manager-content">
+          <LoadingSpinner message="Loading menu..." />
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="menu-manager">
+      <Header user={user} onLogout={onLogout} title={`${user.name} - Menu`} />
+      
+      <main className="manager-content">
+        <div className="manager-header">
+          <h1>Menu Management</h1>
+          <button className="add-button" onClick={() => setShowAddModal(true)}>
+            Add Menu Item
+          </button>
+        </div>
+
+        {error && <div className="error-message">{error}</div>}
+
+        <div className="table-container">
+          <Table
+            columns={columns}
+            data={menu}
+          />
+        </div>
+      </main>
+
+      <Modal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Add Menu Item"
+      >
+        <Form
+          fields={formFields}
+          onSubmit={handleAddItem}
+          submitLabel="Add Item"
+        />
+      </Modal>
+    </div>
+  );
+};
+
+export default MenuManager;

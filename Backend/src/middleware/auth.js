@@ -1,0 +1,125 @@
+import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
+
+import User from '../models/User.js';
+import Admin from '../models/Admin.js';
+import SuperAdmin from '../models/User/SuperAdmin.js';
+import Customer from '../models/Customer.js';
+import RestaurantUser from '../models/RestaurantUser.js';
+
+const protect = async (req, res, next) => {
+  let token;
+
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    try {
+      token = req.headers.authorization.split(' ')[1];
+
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+      // Check if database is connected
+      if (mongoose.connection.readyState !== 1) {
+        console.warn('Database not connected, skipping user lookup');
+        return res.status(503).json({
+          success: false,
+          message: 'Database temporarily unavailable'
+        });
+      }
+
+      // Determine which model to use based on the token type
+      let user;
+      switch (decoded.type) {
+        case 'admin':
+          user = await Admin.findById(decoded.id).select('-password');
+          break;
+        case 'super_admin':
+          user = await SuperAdmin.findById(decoded.id).select('-password');
+          break;
+        case 'customer':
+          user = await Customer.findById(decoded.id).select('-password');
+          break;
+        case 'restaurant':
+          user = await RestaurantUser.findById(decoded.id).select('-password');
+          break;
+        default:
+          // Fallback to original User model for backward compatibility
+          user = await User.findById(decoded.id).select('-password');
+      }
+
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      req.user = user;
+      req.user.type = decoded.type; // Add type to request for easier access
+
+      next();
+    } catch (error) {
+      console.error('Auth middleware error:', error);
+      res.status(401).json({
+        success: false,
+        message: 'Not authorized, token failed'
+      });
+    }
+  } else {
+    res.status(401).json({
+      success: false,
+      message: 'Not authorized, no token'
+    });
+  }
+};
+
+const authorize = (...allowedTypes) => {
+  return (req, res, next) => {
+    // Check if user type is in allowed types
+    if (!allowedTypes.includes(req.user.type)) {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. Required user type: ${allowedTypes.join(' or ')}`
+      });
+    }
+
+    // For admin users, also check role if it's an admin-specific route
+    if (req.user.type === 'admin' && allowedTypes.includes('super_admin')) {
+      if (req.user.role !== 'super_admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. Super admin role required.'
+        });
+      }
+    }
+
+    next();
+  };
+};
+
+// Check admin permissions middleware
+const checkPermission = (permission) => {
+  return (req, res, next) => {
+    if (req.user.type !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin access required.'
+      });
+    }
+
+    // Super admin has all permissions
+    if (req.user.role === 'super_admin') {
+      return next();
+    }
+
+    // Check if admin has specific permission
+    if (!req.user.permissions || !req.user.permissions.includes(permission)) {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. Required permission: ${permission}`
+      });
+    }
+
+    next();
+  };
+};
+
+export { protect, authorize, checkPermission };

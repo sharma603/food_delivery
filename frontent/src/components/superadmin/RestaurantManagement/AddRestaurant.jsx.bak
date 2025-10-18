@@ -1,0 +1,1086 @@
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Building2,
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Lock,
+  Eye,
+  EyeOff,
+  Upload,
+  X,
+  CheckCircle,
+  AlertCircle,
+  Save,
+  ArrowLeft,
+  Clock,
+  DollarSign,
+  Globe,
+  Star,
+  Shield,
+  FileText,
+  Image as ImageIcon,
+  Plus,
+  Minus,
+  Info
+} from 'lucide-react';
+import api from '../../../utils/api';
+
+const AddRestaurant = () => {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+
+  const [formData, setFormData] = useState({
+    // Restaurant Information
+    restaurantName: '',
+    description: '',
+    cuisine: '',
+    address: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'Nepal',
+    phone: '',
+    email: '',
+    website: '',
+    openingTime: '09:00',
+    closingTime: '22:00',
+    deliveryRadius: '5',
+    minimumOrder: '15',
+    deliveryFee: '2.99',
+    
+    // Owner Information
+    ownerName: '',
+    ownerEmail: '',
+    ownerPhone: '',
+    
+    // User Account
+    username: '',
+    password: '',
+    confirmPassword: '',
+    
+    // Business Information
+    businessLicense: '',
+    taxId: '',
+    establishedYear: new Date().getFullYear(),
+    
+    // Additional Settings
+    isActive: true,
+    acceptsOnlineOrders: true,
+    acceptsCashOnDelivery: true,
+    acceptsCardPayment: true,
+    hasParking: false,
+    hasWifi: false,
+    hasOutdoorSeating: false,
+    isVegetarianFriendly: false,
+    isHalalCertified: false,
+    isKosherCertified: false
+  });
+
+  const [currentStep, setCurrentStep] = useState(1);
+  const [formErrors, setFormErrors] = useState({});
+  const [touched, setTouched] = useState({});
+
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+    
+    // Clear error when user starts typing
+    if (formErrors[name]) {
+      setFormErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+    
+    // Mark field as touched
+    setTouched(prev => ({
+      ...prev,
+      [name]: true
+    }));
+  };
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onload = (e) => setImagePreview(e.target.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+  };
+
+  const validateField = (name, value) => {
+    const errors = {};
+    
+    switch (name) {
+      case 'restaurantName':
+        if (!value.trim()) errors.restaurantName = 'Restaurant name is required';
+        else if (value.trim().length < 2) errors.restaurantName = 'Restaurant name must be at least 2 characters';
+        break;
+      case 'ownerName':
+        if (!value.trim()) errors.ownerName = 'Owner name is required';
+        else if (value.trim().length < 2) errors.ownerName = 'Owner name must be at least 2 characters';
+        break;
+      case 'ownerEmail':
+        if (!value.trim()) errors.ownerEmail = 'Owner email is required';
+        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) errors.ownerEmail = 'Please enter a valid email address';
+        break;
+      case 'username':
+        if (!value.trim()) errors.username = 'Username is required';
+        else if (value.length < 3) errors.username = 'Username must be at least 3 characters';
+        else if (!/^[a-zA-Z0-9_]+$/.test(value)) errors.username = 'Username can only contain letters, numbers, and underscores';
+        break;
+      case 'password':
+        if (!value) errors.password = 'Password is required';
+        else if (value.length < 6) errors.password = 'Password must be at least 6 characters';
+        else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(value)) errors.password = 'Password must contain at least one uppercase letter, one lowercase letter, and one number';
+        break;
+          case 'businessLicense':
+            if (!value.trim()) errors.businessLicense = 'Business license is required';
+            break;
+          case 'taxId':
+            if (!value.trim()) errors.taxId = 'Tax ID is required';
+            break;
+      case 'phone':
+        if (value && !/^[\+]?[1-9][\d]{0,15}$/.test(value.replace(/[\s\-\(\)]/g, ''))) {
+          errors.phone = 'Please enter a valid phone number';
+        }
+        break;
+      case 'email':
+        if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          errors.email = 'Please enter a valid email address';
+        }
+        break;
+      case 'website':
+        if (value && !/^https?:\/\/.+/.test(value)) {
+          errors.website = 'Website must start with http:// or https://';
+        }
+        break;
+    }
+    
+    return errors;
+  };
+
+  const validateForm = () => {
+    const errors = {};
+        const requiredFields = ['restaurantName', 'ownerName', 'ownerEmail', 'businessLicense', 'taxId'];
+    
+    requiredFields.forEach(field => {
+      const fieldErrors = validateField(field, formData[field]);
+      Object.assign(errors, fieldErrors);
+    });
+    
+    // Validate optional fields if they have values
+    ['phone', 'email', 'website'].forEach(field => {
+      if (formData[field]) {
+        const fieldErrors = validateField(field, formData[field]);
+        Object.assign(errors, fieldErrors);
+      }
+    });
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (!validateForm()) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Prepare data for backend
+      const restaurantData = {
+        restaurantName: formData.restaurantName,
+        ownerName: formData.ownerName,
+        email: formData.ownerEmail,
+        phone: formData.phone,
+        address: {
+          street: formData.address,
+          city: formData.city,
+          state: formData.state,
+          zipCode: formData.zipCode,
+          country: formData.country
+        },
+        cuisine: [formData.cuisine],
+        description: formData.description,
+        businessLicense: formData.businessLicense,
+        taxId: formData.taxId,
+        establishedYear: formData.establishedYear,
+        website: formData.website,
+        deliveryInfo: {
+          deliveryTime: {
+            min: 30,
+            max: 60
+          },
+          deliveryFee: parseFloat(formData.deliveryFee),
+          minimumOrder: parseFloat(formData.minimumOrder),
+          deliveryRadius: parseFloat(formData.deliveryRadius)
+        },
+        features: [
+          'delivery',
+          'pickup',
+          ...(formData.acceptsOnlineOrders ? ['online_payment'] : []),
+          ...(formData.acceptsCashOnDelivery ? ['cash_on_delivery'] : []),
+          ...(formData.acceptsCardPayment ? ['card_payment'] : [])
+        ],
+        socialMedia: {
+          website: formData.website
+        }
+      };
+
+      console.log('Sending restaurant data:', restaurantData);
+      const response = await api.post('/superadmin/restaurants', restaurantData);
+
+      if (response.data.success) {
+        setSuccess('Restaurant created successfully! Credentials have been sent to the owner.');
+        setTimeout(() => {
+          navigate('/admin/restaurants');
+        }, 2000);
+      } else {
+        setError(response.data.message || 'Failed to create restaurant');
+      }
+    } catch (err) {
+      console.error('Restaurant creation error:', err);
+      setError(err.response?.data?.message || 'An error occurred while creating the restaurant');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const steps = [
+    { id: 1, title: 'Restaurant Info', icon: Building2 },
+    { id: 2, title: 'Owner Details', icon: User },
+    { id: 3, title: 'Business Details', icon: FileText },
+    { id: 4, title: 'Review & Submit', icon: CheckCircle }
+  ];
+
+  const nextStep = () => {
+    if (currentStep < steps.length) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const fillDummyData = () => {
+    const dummyData = {
+      // Restaurant Information
+      restaurantName: 'Himalayan Spice Kitchen',
+      description: 'Authentic Nepali and Indian cuisine with fresh ingredients and traditional recipes passed down through generations.',
+      cuisine: 'north_indian',
+      phone: '+977-1-4567890',
+      email: 'info@himalayanspice.com',
+      website: 'https://www.himalayanspice.com',
+      businessLicense: 'BL-2024-001234',
+      taxId: 'TAX-2024-567890',
+      establishedYear: 2018,
+      
+      // Address Information
+      address: 'Thamel Marg, Thamel',
+      city: 'Kathmandu',
+      state: 'Bagmati',
+      zipCode: '44600',
+      country: 'Nepal',
+      
+      // Owner Information
+      ownerName: 'Rajesh Sharma',
+      ownerEmail: 'rajesh.sharma@himalayanspice.com',
+      ownerPhone: '+977-9801234567',
+      
+      // User Account
+      username: 'himalayanspice_admin',
+      password: 'HimalayanSpice@2024',
+      confirmPassword: 'HimalayanSpice@2024',
+      
+      // Additional Settings
+      isActive: true,
+      acceptsOnlineOrders: true,
+      acceptsCashOnDelivery: true,
+      acceptsCardPayment: true,
+      hasParking: true,
+      hasWifi: true,
+      hasOutdoorSeating: false,
+      isVegetarianFriendly: true,
+      isHalalCertified: false,
+      isKosherCertified: false,
+      openingTime: '09:00',
+      closingTime: '22:00',
+      deliveryRadius: '5',
+      minimumOrder: '15',
+      deliveryFee: '2.99'
+    };
+
+    setFormData(dummyData);
+    setFormErrors({});
+    setTouched({});
+    setSuccess('Dummy data filled successfully! You can now test the form.');
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="mb-8">
+          <button
+            onClick={() => navigate('/admin/restaurants')}
+            className="flex items-center text-gray-600 hover:text-gray-800 mb-4 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 mr-2" />
+            Back to Restaurants
+          </button>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Add New Restaurant</h1>
+              <p className="text-gray-600 mt-2">Register a new restaurant and create owner account</p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={fillDummyData}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Fill Dummy Data
+              </button>
+              <div className="flex items-center space-x-2 text-sm text-gray-500">
+                <Info className="w-4 h-4" />
+                <span>Step {currentStep} of {steps.length}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Progress Steps */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            {steps.map((step, index) => {
+              const StepIcon = step.icon;
+              const isActive = currentStep === step.id;
+              const isCompleted = currentStep > step.id;
+              
+              return (
+                <div key={step.id} className="flex items-center">
+                  <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors ${
+                    isCompleted 
+                      ? 'bg-green-500 border-green-500 text-white' 
+                      : isActive 
+                        ? 'bg-blue-500 border-blue-500 text-white' 
+                        : 'bg-white border-gray-300 text-gray-400'
+                  }`}>
+                    {isCompleted ? (
+                      <CheckCircle className="w-5 h-5" />
+                    ) : (
+                      <StepIcon className="w-5 h-5" />
+                    )}
+                  </div>
+                  <div className="ml-3">
+                    <p className={`text-sm font-medium ${
+                      isActive ? 'text-blue-600' : isCompleted ? 'text-green-600' : 'text-gray-500'
+                    }`}>
+                      {step.title}
+                    </p>
+                  </div>
+                  {index < steps.length - 1 && (
+                    <div className={`w-16 h-0.5 mx-4 ${
+                      isCompleted ? 'bg-green-500' : 'bg-gray-300'
+                    }`} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Success/Error Messages */}
+        {success && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg flex items-center gap-2">
+            <CheckCircle className="w-5 h-5" />
+            <span>{success}</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center gap-2">
+            <AlertCircle className="w-5 h-5" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* Step 1: Restaurant Information */}
+          {currentStep === 1 && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Building2 className="w-6 h-6 text-blue-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Restaurant Information</h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Restaurant Name */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Restaurant Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="restaurantName"
+                    value={formData.restaurantName}
+                    onChange={handleInputChange}
+                    onBlur={(e) => {
+                      const errors = validateField('restaurantName', e.target.value);
+                      setFormErrors(prev => ({ ...prev, ...errors }));
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      formErrors.restaurantName ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="Enter restaurant name"
+                    required
+                  />
+                  {formErrors.restaurantName && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.restaurantName}</p>
+                  )}
+                </div>
+
+                {/* Description */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    name="description"
+                    value={formData.description}
+                    onChange={handleInputChange}
+                    rows={3}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Describe your restaurant, specialties, and what makes it unique..."
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Optional: Help customers understand what to expect</p>
+                </div>
+
+                {/* Cuisine */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cuisine Type
+                  </label>
+                  <select
+                    name="cuisine"
+                    value={formData.cuisine}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select cuisine type</option>
+                    
+                    {/* Nepali Cuisine */}
+                    <optgroup label="🇳🇵 Nepali Cuisine">
+                      <option value="dal_bhat_tarkari">Dal Bhat Tarkari (National Staple)</option>
+                      <option value="momo">Momo (Dumplings)</option>
+                      <option value="newari">Newari Cuisine (Bara, Chatamari, Yomari)</option>
+                      <option value="thakali">Thakali Cuisine (Thakali Thali, Buckwheat)</option>
+                      <option value="sherpa">Sherpa Cuisine (Thukpa, Gyuma, Yak Butter Tea)</option>
+                      <option value="nepali_street_food">Nepali Street Food (Chatpate, Panipuri, Sekuwa)</option>
+                      <option value="dhido_traditional">Dhido & Traditional (Millet, Barley, Gundruk)</option>
+                      <option value="nepali_snacks">Nepali Snacks (Chowmein, Fried Rice, Pakoda)</option>
+                    </optgroup>
+
+                    {/* Indian Cuisine */}
+                    <optgroup label="🇮🇳 Indian Cuisine">
+                      <option value="north_indian">North Indian (Butter Chicken, Naan, Rajma)</option>
+                      <option value="south_indian">South Indian (Dosa, Idli, Sambar, Vada)</option>
+                      <option value="gujarati">Gujarati (Dhokla, Thepla, Khichdi)</option>
+                      <option value="rajasthani">Rajasthani (Dal Baati Churma, Gatte Ki Sabzi)</option>
+                      <option value="punjabi">Punjabi (Paratha, Sarson Da Saag, Lassi)</option>
+                      <option value="bengali">Bengali (Fish Curry, Mishti Doi, Rasgulla)</option>
+                      <option value="mughlai">Mughlai (Biryani, Kebabs, Korma, Nihari)</option>
+                      <option value="hyderabadi">Hyderabadi (Hyderabadi Biryani, Haleem)</option>
+                      <option value="indian_street_food">Indian Street Food (Golgappa, Pav Bhaji, Samosa)</option>
+                      <option value="indian_sweets">Indian Sweets (Gulab Jamun, Jalebi, Rasmalai)</option>
+                    </optgroup>
+
+                    {/* International Cuisine */}
+                    <optgroup label="🌍 International Cuisine">
+                      <option value="italian">Italian</option>
+                      <option value="chinese">Chinese</option>
+                      <option value="mexican">Mexican</option>
+                      <option value="american">American</option>
+                      <option value="thai">Thai</option>
+                      <option value="japanese">Japanese</option>
+                      <option value="mediterranean">Mediterranean</option>
+                      <option value="korean">Korean</option>
+                      <option value="vietnamese">Vietnamese</option>
+                      <option value="french">French</option>
+                      <option value="greek">Greek</option>
+                      <option value="other">Other</option>
+                    </optgroup>
+                  </select>
+                </div>
+
+                {/* Phone */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Restaurant Phone
+                  </label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    onBlur={(e) => {
+                      const errors = validateField('phone', e.target.value);
+                      setFormErrors(prev => ({ ...prev, ...errors }));
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      formErrors.phone ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="+977 9800000000"
+                  />
+                  {formErrors.phone && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.phone}</p>
+                  )}
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Restaurant Email
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    onBlur={(e) => {
+                      const errors = validateField('email', e.target.value);
+                      setFormErrors(prev => ({ ...prev, ...errors }));
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      formErrors.email ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="restaurant@example.com"
+                  />
+                  {formErrors.email && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>
+                  )}
+                </div>
+
+                {/* Website */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Website
+                  </label>
+                  <input
+                    type="url"
+                    name="website"
+                    value={formData.website}
+                    onChange={handleInputChange}
+                    onBlur={(e) => {
+                      const errors = validateField('website', e.target.value);
+                      setFormErrors(prev => ({ ...prev, ...errors }));
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      formErrors.website ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="https://www.example.com"
+                  />
+                  {formErrors.website && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.website}</p>
+                  )}
+                </div>
+
+                {/* Business License */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Business License *
+                  </label>
+                  <input
+                    type="text"
+                    name="businessLicense"
+                    value={formData.businessLicense}
+                    onChange={handleInputChange}
+                    onBlur={(e) => {
+                      const errors = validateField('businessLicense', e.target.value);
+                      setFormErrors(prev => ({ ...prev, ...errors }));
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      formErrors.businessLicense ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="Enter business license number"
+                    required
+                  />
+                  {formErrors.businessLicense && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.businessLicense}</p>
+                  )}
+                </div>
+
+                {/* Tax ID */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tax ID *
+                  </label>
+                  <input
+                    type="text"
+                    name="taxId"
+                    value={formData.taxId}
+                    onChange={handleInputChange}
+                    onBlur={(e) => {
+                      const errors = validateField('taxId', e.target.value);
+                      setFormErrors(prev => ({ ...prev, ...errors }));
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      formErrors.taxId ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="Enter tax identification number"
+                    required
+                  />
+                  {formErrors.taxId && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.taxId}</p>
+                  )}
+                </div>
+
+                {/* Established Year */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Established Year
+                  </label>
+                  <input
+                    type="number"
+                    name="establishedYear"
+                    value={formData.establishedYear}
+                    onChange={handleInputChange}
+                    min="1900"
+                    max={new Date().getFullYear()}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="2020"
+                  />
+                </div>
+              </div>
+              
+              {/* Step Navigation */}
+              <div className="flex justify-end mt-8">
+                <button
+                  type="button"
+                  onClick={nextStep}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  Next Step
+                  <ArrowLeft className="w-4 h-4 rotate-180" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Address Information */}
+          {currentStep === 2 && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <MapPin className="w-6 h-6 text-green-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Address Information</h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Address */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Street Address
+                  </label>
+                  <input
+                    type="text"
+                    name="address"
+                    value={formData.address}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="123 Main Street"
+                  />
+                </div>
+
+                {/* City */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    City
+                  </label>
+                  <input
+                    type="text"
+                    name="city"
+                    value={formData.city}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Kathmandu"
+                  />
+                </div>
+
+                {/* State */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    State/Province
+                  </label>
+                  <input
+                    type="text"
+                    name="state"
+                    value={formData.state}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Bagmati"
+                  />
+                </div>
+
+                {/* Zip Code */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Zip Code
+                  </label>
+                  <input
+                    type="text"
+                    name="zipCode"
+                    value={formData.zipCode}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="44600"
+                  />
+                </div>
+
+                {/* Country */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Country
+                  </label>
+                  <input
+                    type="text"
+                    name="country"
+                    value={formData.country}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Nepal"
+                  />
+                </div>
+              </div>
+              
+              {/* Step Navigation */}
+              <div className="flex justify-between mt-8">
+                <button
+                  type="button"
+                  onClick={prevStep}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={nextStep}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  Next Step
+                  <ArrowLeft className="w-4 h-4 rotate-180" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Owner Information */}
+          {currentStep === 3 && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <User className="w-6 h-6 text-purple-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Owner Information</h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Owner Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Owner Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="ownerName"
+                    value={formData.ownerName}
+                    onChange={handleInputChange}
+                    onBlur={(e) => {
+                      const errors = validateField('ownerName', e.target.value);
+                      setFormErrors(prev => ({ ...prev, ...errors }));
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      formErrors.ownerName ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="John Doe"
+                    required
+                  />
+                  {formErrors.ownerName && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.ownerName}</p>
+                  )}
+                </div>
+
+                {/* Owner Email */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Owner Email *
+                  </label>
+                  <input
+                    type="email"
+                    name="ownerEmail"
+                    value={formData.ownerEmail}
+                    onChange={handleInputChange}
+                    onBlur={(e) => {
+                      const errors = validateField('ownerEmail', e.target.value);
+                      setFormErrors(prev => ({ ...prev, ...errors }));
+                    }}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      formErrors.ownerEmail ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="owner@example.com"
+                    required
+                  />
+                  {formErrors.ownerEmail && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.ownerEmail}</p>
+                  )}
+                </div>
+
+                {/* Owner Phone */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Owner Phone
+                  </label>
+                  <input
+                    type="tel"
+                    name="ownerPhone"
+                    value={formData.ownerPhone}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="+977 9800000000"
+                  />
+                </div>
+              </div>
+              
+              {/* Step Navigation */}
+              <div className="flex justify-between mt-8">
+                <button
+                  type="button"
+                  onClick={prevStep}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={nextStep}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  Next Step
+                  <ArrowLeft className="w-4 h-4 rotate-180" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Review & Submit */}
+          {currentStep === 4 && (
+            <div className="space-y-6">
+              {/* User Account */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center gap-2 mb-6">
+                  <Lock className="w-6 h-6 text-red-600" />
+                  <h2 className="text-xl font-semibold text-gray-900">User Account</h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Username */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Username *
+                    </label>
+                    <input
+                      type="text"
+                      name="username"
+                      value={formData.username}
+                      onChange={handleInputChange}
+                      onBlur={(e) => {
+                        const errors = validateField('username', e.target.value);
+                        setFormErrors(prev => ({ ...prev, ...errors }));
+                      }}
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        formErrors.username ? 'border-red-300' : 'border-gray-300'
+                      }`}
+                      placeholder="Choose a username"
+                      required
+                    />
+                    {formErrors.username && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.username}</p>
+                    )}
+                  </div>
+
+                  {/* Password */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Password *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        name="password"
+                        value={formData.password}
+                        onChange={handleInputChange}
+                        onBlur={(e) => {
+                          const errors = validateField('password', e.target.value);
+                          setFormErrors(prev => ({ ...prev, ...errors }));
+                        }}
+                        className={`w-full px-4 py-3 pr-12 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                          formErrors.password ? 'border-red-300' : 'border-gray-300'
+                        }`}
+                        placeholder="Enter password"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                    {formErrors.password && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.password}</p>
+                    )}
+                  </div>
+
+                  {/* Confirm Password */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Confirm Password *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleInputChange}
+                        className={`w-full px-4 py-3 pr-12 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                          formData.password !== formData.confirmPassword && formData.confirmPassword ? 'border-red-300' : 'border-gray-300'
+                        }`}
+                        placeholder="Confirm password"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                    {formData.password !== formData.confirmPassword && formData.confirmPassword && (
+                      <p className="mt-1 text-sm text-red-600">Passwords do not match</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Restaurant Image */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center gap-2 mb-6">
+                  <Upload className="w-6 h-6 text-indigo-600" />
+                  <h2 className="text-xl font-semibold text-gray-900">Restaurant Image</h2>
+                </div>
+
+                <div className="space-y-4">
+                  {imagePreview ? (
+                    <div className="relative">
+                      <img
+                        src={imagePreview}
+                        alt="Restaurant preview"
+                        className="w-full h-48 object-cover rounded-lg"
+                      />
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                      <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-600 mb-4">Upload restaurant image</p>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        id="image-upload"
+                      />
+                      <label
+                        htmlFor="image-upload"
+                        className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer"
+                      >
+                        Choose File
+                      </label>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Step Navigation */}
+              <div className="flex justify-between mt-8">
+                <button
+                  type="button"
+                  onClick={prevStep}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Registering...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Register Restaurant
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default AddRestaurant;

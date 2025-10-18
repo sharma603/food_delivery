@@ -1,0 +1,541 @@
+import React, { useState, useEffect } from 'react';
+import {
+ X,
+ Save,
+ Image as ImageIcon,
+ AlertCircle,
+ CheckCircle,
+ Clock,
+ UtensilsCrossed,
+ ArrowLeft,
+ Info
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import api from '../../../utils/api';
+
+// Font Awesome Rupee Icon Component (₹)
+const RupeeIcon = ({ className }) => (
+ <i className={`fas fa-rupee-sign ${className}`}></i>
+);
+
+const AddMenuItem = () => {
+ const navigate = useNavigate();
+ const [loading, setLoading] = useState(false);
+ const [categories, setCategories] = useState([]);
+ const [categoriesLoading, setCategoriesLoading] = useState(true);
+ const [successMessage, setSuccessMessage] = useState('');
+ const [errorMessage, setErrorMessage] = useState('');
+
+ const [formData, setFormData] = useState({
+ name: '',
+ description: '',
+ price: '',
+ category: '',
+ image: '',
+ ingredients: '',
+ preparationTime: '',
+ isVegetarian: false,
+ isSpicy: false,
+ isPopular: false,
+ isActive: true,
+ sortOrder: 0
+ });
+ const [selectedFile, setSelectedFile] = useState(null);
+
+ useEffect(() => {
+ fetchCategories();
+ }, []);
+
+ const fetchCategories = async () => {
+ try {
+ setCategoriesLoading(true);
+ // Fetch categories from the API
+ const response = await api.get('/menu-items/categories');
+ 
+ if (response.data.success && Array.isArray(response.data.data)) {
+ setCategories(response.data.data);
+ } else {
+ setCategories([]);
+ }
+ } catch (error) {
+ console.error(' Error fetching categories:', error);
+ // Fallback to empty array if API fails
+ setCategories([]);
+ } finally {
+ setCategoriesLoading(false);
+ }
+ };
+
+ const handleInputChange = (e) => {
+ const { name, value, type, checked } = e.target;
+ setFormData(prev => ({
+ ...prev,
+ [name]: type === 'checkbox' ? checked : value
+ }));
+ };
+
+ const handleSubmit = async (e) => {
+ e.preventDefault();
+ setLoading(true);
+ setErrorMessage('');
+ setSuccessMessage('');
+
+ try {
+ // Validate required fields
+ if (!formData.name.trim()) {
+ throw new Error('Item name is required');
+ }
+ if (!formData.price) {
+ throw new Error('Price is required');
+ }
+ if (!formData.category) {
+ throw new Error('Category is required');
+ }
+
+ // Prepare FormData for API submission with file upload
+ const menuItemData = new FormData();
+ 
+ // Add text fields
+ menuItemData.append('name', formData.name);
+ menuItemData.append('description', formData.description || '');
+ menuItemData.append('price', formData.price);
+ menuItemData.append('categoryId', formData.category);
+ menuItemData.append('ingredients', formData.ingredients || '');
+ menuItemData.append('preparationTime', formData.preparationTime || '15');
+ menuItemData.append('isVegetarian', formData.isVegetarian);
+ menuItemData.append('isSpicy', formData.isSpicy);
+ menuItemData.append('isPopular', formData.isPopular);
+ menuItemData.append('isActive', formData.isActive);
+ menuItemData.append('sortOrder', formData.sortOrder || '0');
+ 
+ // Add image file if selected
+ if (selectedFile) {
+ console.log(' Adding file to FormData:', selectedFile.name, selectedFile.size, selectedFile.type);
+ menuItemData.append('images', selectedFile);
+ } else {
+ console.log(' No file selected for upload');
+ }
+
+ // Debug FormData contents
+ console.log(' FormData contents:');
+ for (let [key, value] of menuItemData.entries()) {
+ console.log(` ${key}:`, value);
+ }
+
+ // Submit to API with FormData
+ const response = await api.post('/menu-items', menuItemData, {
+ headers: {
+ 'Content-Type': 'multipart/form-data',
+ },
+ });
+ 
+ setSuccessMessage('Menu item added successfully!');
+ 
+ // Reset form after success
+ setFormData({
+ name: '',
+ description: '',
+ price: '',
+ category: '',
+ image: '',
+ ingredients: '',
+ preparationTime: '',
+ isVegetarian: false,
+ isSpicy: false,
+ isPopular: false,
+ isActive: true,
+ sortOrder: 0
+ });
+ setSelectedFile(null);
+ // Clear the file input
+ const fileInput = document.getElementById('image-upload');
+ if (fileInput) fileInput.value = '';
+
+ } catch (error) {
+ setErrorMessage(error.message);
+ } finally {
+ setLoading(false);
+ }
+ };
+
+ const handleImageUpload = (e) => {
+ const file = e.target.files[0];
+ if (file) {
+ setSelectedFile(file);
+ // Create preview URL for display
+ const reader = new FileReader();
+ reader.onload = (e) => {
+ setFormData(prev => ({
+ ...prev,
+ image: e.target.result
+ }));
+ };
+ reader.readAsDataURL(file);
+ }
+ };
+
+ return (
+ <div className="p-4 bg-gray-50 min-h-screen">
+ {/* Header */}
+ <div className="mb-6">
+ <div className="flex items-center gap-3 mb-3">
+ <button
+ onClick={() => navigate('/restaurant/menu')}
+ className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors text-sm"
+ >
+ <ArrowLeft className="w-4 h-4" />
+ Back to Menu Management
+ </button>
+ </div>
+ <div>
+ <h1 className="text-2xl font-bold text-gray-900 mb-1">Add New Menu Item</h1>
+ <p className="text-gray-600 text-sm">Create a new menu item for your restaurant</p>
+ </div>
+ </div>
+
+ {/* Success/Error Messages */}
+ {successMessage && (
+ <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-3">
+ <div className="flex items-center gap-2">
+ <CheckCircle className="w-4 h-4 text-green-600" />
+ <p className="text-green-800 font-medium text-sm">{successMessage}</p>
+ </div>
+ </div>
+ )}
+
+ {errorMessage && (
+ <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
+ <div className="flex items-center gap-2">
+ <AlertCircle className="w-4 h-4 text-red-600" />
+ <p className="text-red-800 font-medium text-sm">{errorMessage}</p>
+ </div>
+ </div>
+ )}
+
+ {/* Form */}
+ <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+ <div className="p-4 border-b border-gray-200">
+ <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+ <UtensilsCrossed className="w-4 h-4 text-orange-600" />
+ Menu Item Details
+ </h2>
+ </div>
+
+ <form onSubmit={handleSubmit} className="p-4">
+ <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+ {/* Basic Information */}
+ <div className="space-y-4">
+ <h3 className="text-base font-medium text-gray-900 border-b border-gray-200 pb-2">
+ Basic Information
+</h3>
+
+ {/* Item Name */}
+ <div>
+ <label className="block text-sm font-medium text-gray-700 mb-1">
+ Item Name *
+ </label>
+ <input
+ type="text"
+ name="name"
+ value={formData.name}
+ onChange={handleInputChange}
+ className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+ placeholder="e.g., Chicken Momo"
+ required
+ />
+ </div>
+
+ {/* Description */}
+ <div>
+ <label className="block text-sm font-medium text-gray-700 mb-1">
+ Description
+ </label>
+ <textarea
+ name="description"
+ value={formData.description}
+ onChange={handleInputChange}
+ rows="3"
+ className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm resize-none"
+ placeholder="Describe your menu item..."
+ />
+ </div>
+
+ {/* Category */}
+ <div>
+ <div className="flex items-center justify-between mb-1">
+ <label className="block text-sm font-medium text-gray-700">
+ Category *
+ </label>
+ <button
+ type="button"
+ onClick={fetchCategories}
+ disabled={categoriesLoading}
+ className="text-xs text-orange-600 hover:text-orange-700 disabled:opacity-50"
+ >
+ {categoriesLoading ? 'Loading...' : 'Refresh'}
+ </button>
+ </div>
+ <select
+ name="category"
+ value={formData.category}
+ onChange={handleInputChange}
+ className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+ required
+ disabled={categoriesLoading}
+ >
+ <option value="">
+ {categoriesLoading ? 'Loading categories...' : 'Select Category'}
+ </option>
+ {categories.map(category => (
+ <option key={category._id} value={category._id}>
+ {category.displayName || category.name}
+ </option>
+ ))}
+ </select>
+ {categories.length === 0 && !categoriesLoading && (
+ <p className="text-xs text-red-500 mt-1">
+ No categories available. Please contact admin to add categories.
+ </p>
+ )}
+ </div>
+
+ {/* Price */}
+ <div>
+ <label className="block text-sm font-medium text-gray-700 mb-1">
+ Price (NPR) *
+ </label>
+ <div className="relative">
+ <RupeeIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+ <input
+ type="number"
+ name="price"
+ value={formData.price}
+ onChange={handleInputChange}
+ className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+ placeholder="0"
+ min="0"
+ step="0.01"
+ required
+ />
+ </div>
+ </div>
+
+ {/* Preparation Time */}
+ <div>
+ <label className="block text-sm font-medium text-gray-700 mb-1">
+ Preparation Time
+ </label>
+ <div className="relative">
+ <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+ <input
+ type="text"
+ name="preparationTime"
+ value={formData.preparationTime}
+ onChange={handleInputChange}
+ className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+ placeholder="e.g., 15-20 minutes"
+ />
+ </div>
+ </div>
+ </div>
+
+ {/* Additional Details */}
+ <div className="space-y-4">
+ <h3 className="text-base font-medium text-gray-900 border-b border-gray-200 pb-2">
+ Additional Details
+</h3>
+
+ {/* Image Upload */}
+ <div>
+ <label className="block text-sm font-medium text-gray-700 mb-1">
+ Item Image
+ </label>
+ <div className="border-2 border-dashed border-gray-300 rounded-md p-4 text-center hover:border-orange-400 transition-colors">
+ <input
+ type="file"
+ accept="image/*"
+ onChange={handleImageUpload}
+ className="hidden"
+ id="image-upload"
+ />
+ <label
+ htmlFor="image-upload"
+ className="cursor-pointer flex flex-col items-center"
+ >
+ {formData.image ? (
+ <div className="relative">
+ <img
+ src={formData.image}
+ alt="Preview"
+ className="w-24 h-24 object-cover rounded-md"
+ />
+ <button
+ type="button"
+ onClick={(e) => {
+ e.preventDefault();
+ setFormData(prev => ({ ...prev, image: '' }));
+ setSelectedFile(null);
+ // Clear the file input
+ const fileInput = document.getElementById('image-upload');
+ if (fileInput) fileInput.value = '';
+ }}
+ className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+ >
+ <X className="w-3 h-3" />
+ </button>
+ </div>
+ ) : (
+ <>
+ <ImageIcon className="w-8 h-8 text-gray-400 mb-1" />
+ <p className="text-xs text-gray-600">Click to upload image</p>
+ <p className="text-xs text-gray-500">PNG, JPG up to 10MB</p>
+ </>
+ )}
+ </label>
+ </div>
+ </div>
+
+ {/* Ingredients */}
+ <div>
+ <label className="block text-sm font-medium text-gray-700 mb-1">
+ Ingredients
+ </label>
+ <textarea
+ name="ingredients"
+ value={formData.ingredients}
+ onChange={handleInputChange}
+ rows="2"
+ className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm resize-none"
+ placeholder="List main ingredients..."
+ />
+ </div>
+
+ {/* Sort Order */}
+ <div>
+ <label className="block text-sm font-medium text-gray-700 mb-1">
+ Sort Order
+ </label>
+ <input
+ type="number"
+ name="sortOrder"
+ value={formData.sortOrder}
+ onChange={handleInputChange}
+ className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+ placeholder="0"
+ min="0"
+ />
+ </div>
+
+ {/* Item Attributes */}
+ <div>
+ <label className="block text-sm font-medium text-gray-700 mb-2">
+ Item Attributes
+ </label>
+ <div className="grid grid-cols-2 gap-2">
+ <div className="flex items-center">
+ <input
+ type="checkbox"
+ name="isVegetarian"
+ checked={formData.isVegetarian}
+ onChange={handleInputChange}
+ className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+ />
+ <label className="ml-2 text-xs text-gray-700">
+ Vegetarian
+ </label>
+ </div>
+
+ <div className="flex items-center">
+ <input
+ type="checkbox"
+ name="isSpicy"
+ checked={formData.isSpicy}
+ onChange={handleInputChange}
+ className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+ />
+ <label className="ml-2 text-xs text-gray-700">
+ Spicy
+ </label>
+ </div>
+
+ <div className="flex items-center">
+ <input
+ type="checkbox"
+ name="isPopular"
+ checked={formData.isPopular}
+ onChange={handleInputChange}
+ className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+ />
+ <label className="ml-2 text-xs text-gray-700">
+ Popular Item
+ </label>
+ </div>
+
+ <div className="flex items-center">
+ <input
+ type="checkbox"
+ name="isActive"
+ checked={formData.isActive}
+ onChange={handleInputChange}
+ className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+ />
+ <label className="ml-2 text-xs text-gray-700">
+ Active
+ </label>
+ </div>
+ </div>
+ </div>
+ </div>
+ </div>
+
+ {/* Action Buttons */}
+ <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 mt-4">
+ <button
+ type="button"
+ onClick={() => navigate('/restaurant/menu')}
+ className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-sm"
+ >
+ Cancel
+ </button>
+ <button
+ type="submit"
+ disabled={loading}
+ className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+ >
+ {loading ? (
+ <>
+ <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
+ Adding...
+ </>
+ ) : (
+ <>
+ <Save className="w-3 h-3" />
+ Add Menu Item
+ </>
+ )}
+ </button>
+ </div>
+ </form>
+ </div>
+
+ {/* Help Section */}
+ <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-3">
+ <div className="flex items-start gap-2">
+ <Info className="w-4 h-4 text-blue-600 mt-0.5" />
+ <div>
+ <h4 className="font-medium text-blue-900 mb-1 text-sm">Tips for adding menu items:</h4>
+ <ul className="text-xs text-blue-700 space-y-0.5">
+ <li>• Use descriptive names that customers will recognize</li>
+ <li>• Add clear descriptions to help customers understand the item</li>
+ <li>• Set competitive prices based on your costs and market rates</li>
+ <li>• Use high-quality images to make items more appealing</li>
+ <li>• Mark popular items to highlight them to customers</li>
+ </ul>
+ </div>
+ </div>
+ </div>
+ </div>
+ );
+};
+
+export default AddMenuItem;
