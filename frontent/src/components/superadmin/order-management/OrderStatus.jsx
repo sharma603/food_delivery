@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { superadminApi } from '../../../services/api/superadminApi';
 import WebSocketService from '../../../services/webSocketService';
-import LoadingSpinner from '../../common/LoadingSpinner';
+import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import {
-  Search,
-  Filter,
   RefreshCw,
-  Eye,
   CheckCircle,
   XCircle,
   Clock,
@@ -14,11 +11,7 @@ import {
   Package,
   Truck,
   Store,
-  User,
-  DollarSign,
-  Activity,
-  TrendingUp,
-  TrendingDown
+  User
 } from 'lucide-react';
 import './OrderStatus.css';
 
@@ -164,7 +157,7 @@ const OrderStatus = ({ user, onLogout }) => {
   useEffect(() => {
     fetchOrdersByStatus(selectedStatus);
     fetchStatusCounts();
-  }, [fetchOrdersByStatus, fetchStatusCounts, selectedStatus]);
+  }, [selectedStatus]);
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -176,7 +169,7 @@ const OrderStatus = ({ user, onLogout }) => {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [fetchOrdersByStatus, fetchStatusCounts, selectedStatus, realTimeUpdates]);
+  }, [selectedStatus, realTimeUpdates]);
 
   // Handle status filter change
   const handleStatusFilter = (status) => {

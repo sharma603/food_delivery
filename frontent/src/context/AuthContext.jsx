@@ -15,13 +15,17 @@ export const AuthProvider = ({ children }) => {
     if (token && storedUser) {
       try {
         const parsedUser = JSON.parse(storedUser);
-        // Ensure role is set if not present (for backwards compatibility)
+        
+        // Validate user data
         if (!parsedUser.role) {
-          parsedUser.role = parsedUser.restaurant ? 'restaurant' : 'superadmin';
+          console.warn('User data missing role, clearing storage');
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setLoading(false);
+          return;
         }
-        setUser(parsedUser);
 
-        // Set axios default header
+        setUser(parsedUser);
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       } catch (error) {
         console.error('Error parsing stored user:', error);
@@ -34,97 +38,134 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password, role = 'restaurant') => {
     try {
-      // Use specific endpoints based on role
+      // Determine endpoint based on role
       let endpoint;
       let requestData;
       
-      if (role === 'superadmin') {
-        endpoint = '/auth/superadmin/login';
-        requestData = { email, password };
-      } else if (role === 'restaurant') {
-        endpoint = '/restaurant/auth/login';
-        requestData = { email, password };
-      } else {
-        endpoint = '/auth/login';
-        requestData = { email, password, role };
+      switch (role) {
+        case 'superadmin':
+        case 'super_admin':
+          endpoint = '/auth/superadmin/login';
+          requestData = { email, password };
+          break;
+        case 'restaurant':
+          endpoint = '/restaurant/auth/login';
+          requestData = { email, password };
+          break;
+        case 'delivery':
+          endpoint = '/delivery/auth/login';
+          requestData = { email, password };
+          break;
+        default:
+          endpoint = '/auth/login';
+          requestData = { email, password, role };
       }
 
-      console.log('Attempting login to:', endpoint, 'with role:', role);
+      console.log('🔐 Login attempt:', { role, endpoint, email });
 
+      console.log('📡 Sending login request to:', endpoint);
+      
       const response = await api.post(endpoint, requestData);
-
-      console.log('Login response:', response.data);
-
-      const { success, data } = response.data;
-
+      console.log('📥 Login response:', response.data);
+      
+      // Handle response
+      const { success, data, message } = response.data;
+      
       if (!success || !data) {
-        throw new Error('Invalid response format: ' + JSON.stringify(response.data));
+        throw new Error(message || 'Invalid response from server');
       }
 
-      // Handle both token formats (data.token or data.accessToken)
-      const token = data.accessToken || data.token;
-
-      if (!token) {
-        throw new Error('No token received from server');
+      // Extract token - it's directly in the data object
+      const authToken = data.token;
+      console.log('🎫 Token received:', authToken ? 'Yes' : 'No');
+      console.log('📋 Response data structure:', { 
+        hasToken: !!authToken, 
+        dataKeys: Object.keys(data || {}),
+        tokenLocation: 'data.token'
+      });
+      
+      if (!authToken) {
+        throw new Error('No authentication token received');
       }
 
-      // Ensure role is included in user data
-      const userDataWithRole = {
-        ...data,
-        role: role
-      };
+      // Prepare user data - token is in data object along with user info
+      let userData;
+      
+      if (role === 'super_admin' || role === 'superadmin') {
+        // For super admin: data contains { _id, name, email, role, permissions, token, ... }
+        // Remove token and password from user info
+        const { token: _, password: __, ...cleanUserData } = data;
+        userData = {
+          ...cleanUserData,
+          role: data.role || 'super_admin' // Ensure role is set correctly
+        };
+      } else {
+        // For restaurant/delivery login
+        const { token: _, password: __, ...restaurantData } = data;
+        userData = {
+          ...restaurantData,
+          role: role
+        };
+      }
 
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(userDataWithRole));
+      // Store authentication data
+      localStorage.setItem('token', authToken);
+      localStorage.setItem('user', JSON.stringify(userData));
+      api.defaults.headers.common['Authorization'] = `Bearer ${authToken}`;
+      
+      // Update state immediately
+      setUser(userData);
 
-      // Set axios default header
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-
-      setUser(userDataWithRole);
-
-      console.log('User logged in successfully:', userDataWithRole);
-
-      return { success: true, role, data: userDataWithRole };
+      console.log('✅ Login successful');
+      console.log('👤 User data stored:', { 
+        role: userData.role, 
+        email: userData.email,
+        name: userData.name 
+      });
+      
+      return { success: true, data: userData };
     } catch (error) {
-      console.error('Login error:', error.response?.data || error.message);
-
-      return {
-        success: false,
-        message: error.response?.data?.message || error.message || 'Login failed'
-      };
+      console.error('❌ Login failed:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Login failed';
+      return { success: false, message: errorMessage };
     }
   };
 
   const logout = (redirectPath = null) => {
     const currentUser = user;
 
-    // Clear axios default header
+    // Clear authentication data
     delete api.defaults.headers.common['Authorization'];
-
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
 
-    // Redirect to appropriate login page based on user role
+    // Redirect based on user role or provided path
     if (redirectPath) {
       window.location.href = redirectPath;
-    } else if (currentUser?.role === 'superadmin') {
+    } else if (currentUser?.role === 'superadmin' || currentUser?.role === 'super_admin') {
       window.location.href = '/admin/login';
+    } else if (currentUser?.role === 'delivery') {
+      window.location.href = '/delivery/login';
     } else {
       window.location.href = '/restaurant/login';
     }
   };
 
-  // Function to check for unsaved changes (placeholder implementation)
-  const checkForUnsavedChanges = () => {
-    // This is a placeholder - in a real app, you'd check form states, etc.
-    return false;
+  // Check if user has required role
+  const hasRole = (requiredRole) => {
+    return user?.role === requiredRole;
   };
 
-  // Function to get session duration (placeholder implementation)
-  const getSessionDuration = () => {
-    // This is a placeholder - in a real app, you'd calculate actual session time
-    return '2h 15m';
+  // Check if user is authenticated
+  const isAuthenticated = () => {
+    return !!user && !!localStorage.getItem('token');
+  };
+
+  // Get user's display name
+  const getUserDisplayName = () => {
+    if (!user) return '';
+    return user.name || user.restaurantName || user.email || 'User';
   };
 
   return (
@@ -133,8 +174,9 @@ export const AuthProvider = ({ children }) => {
       login, 
       logout, 
       loading, 
-      checkForUnsavedChanges, 
-      getSessionDuration 
+      hasRole,
+      isAuthenticated,
+      getUserDisplayName
     }}>
       {children}
     </AuthContext.Provider>

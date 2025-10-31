@@ -12,7 +12,7 @@ import {
   Handshake
 } from 'lucide-react';
 import { superadminApi } from '../../../services/api/superadminApi';
-import LoadingSpinner from '../../common/LoadingSpinner';
+import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import { formatCurrency } from '../../../utils/currency';
 
 const FinancialDashboard = ({ user, onLogout }) => {
@@ -109,7 +109,7 @@ const FinancialDashboard = ({ user, onLogout }) => {
 
   useEffect(() => {
     fetchFinancialData();
-  }, [fetchFinancialData]);
+  }, []);
 
   // Currency formatting is now handled by the utility function
 

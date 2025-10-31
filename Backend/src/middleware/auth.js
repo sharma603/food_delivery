@@ -6,6 +6,7 @@ import Admin from '../models/Admin.js';
 import SuperAdmin from '../models/User/SuperAdmin.js';
 import Customer from '../models/Customer.js';
 import RestaurantUser from '../models/RestaurantUser.js';
+import DeliveryPersonnel from '../models/DeliveryPersonnel.js';
 
 const protect = async (req, res, next) => {
   let token;
@@ -39,6 +40,9 @@ const protect = async (req, res, next) => {
           break;
         case 'restaurant':
           user = await RestaurantUser.findById(decoded.id).select('-password');
+          break;
+        case 'delivery':
+          user = await DeliveryPersonnel.findById(decoded.id).select('-password');
           break;
         default:
           // Fallback to original User model for backward compatibility

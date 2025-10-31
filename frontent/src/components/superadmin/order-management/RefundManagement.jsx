@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { superadminApi } from '../../../services/api/superadminApi';
 import WebSocketService from '../../../services/webSocketService';
 import Table from '../../common/Table';
 import SearchBar from '../../common/ui/SearchBar';
 import Pagination from '../../common/ui/Pagination';
 import Modal from '../../common/Modal';
-import LoadingSpinner from '../../common/LoadingSpinner';
+import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import './RefundManagement.css';
 
 const RefundManagement = ({ user, onLogout }) => {
@@ -41,22 +40,6 @@ const RefundManagement = ({ user, onLogout }) => {
     totalAmount: 0
   });
 
-  // Status options
-  const statusOptions = [
-    { value: '', label: 'All Statuses' },
-    { value: 'pending', label: 'Pending' },
-    { value: 'processing', label: 'Processing' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'rejected', label: 'Rejected' }
-  ];
-
-  // Refund type options
-  const refundTypeOptions = [
-    { value: '', label: 'All Types' },
-    { value: 'full', label: 'Full Refund' },
-    { value: 'partial', label: 'Partial Refund' },
-    { value: 'credit', label: 'Account Credit' }
-  ];
 
   // Process refund type options
   const processRefundTypeOptions = [
@@ -273,7 +256,7 @@ const RefundManagement = ({ user, onLogout }) => {
   useEffect(() => {
     fetchRefunds();
     fetchRefundStats();
-  }, [fetchRefunds, fetchRefundStats]);
+  }, []);
 
   // View refund details
   const viewRefundDetails = (refund) => {
@@ -324,11 +307,6 @@ const RefundManagement = ({ user, onLogout }) => {
     setCurrentPage(1);
   };
 
-  // Handle filter change
-  const handleFilterChange = (newFilters) => {
-    setFilters(newFilters);
-    setCurrentPage(1);
-  };
 
   // Export refunds
   const handleExport = async (format = 'csv') => {

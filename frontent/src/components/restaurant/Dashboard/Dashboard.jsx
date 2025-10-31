@@ -38,6 +38,12 @@ const RestaurantDashboard = () => {
  const [toggleLoading, setToggleLoading] = useState(false);
  const [notification, setNotification] = useState(null);
 
+ // Show notification helper placed before any usage to avoid TDZ issues
+ function showNotification(message, type = 'success') {
+   setNotification({ message, type });
+   setTimeout(() => setNotification(null), 3000);
+ }
+
   useEffect(() => {
     fetchDashboardData();
     
@@ -139,11 +145,7 @@ const RestaurantDashboard = () => {
  // You can implement API call here for date-specific data
  };
 
- // Show notification helper function
- const showNotification = (message, type = 'success') => {
- setNotification({ message, type });
- setTimeout(() => setNotification(null), 3000);
- };
+// (moved showNotification above)
 
  // Toggle restaurant open/close status with optimistic UI updates
  const toggleRestaurantStatus = async () => {

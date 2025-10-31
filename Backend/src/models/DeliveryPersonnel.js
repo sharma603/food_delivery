@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 const deliveryPersonnelSchema = new mongoose.Schema({
   // Basic Information
@@ -27,6 +28,12 @@ const deliveryPersonnelSchema = new mongoose.Schema({
     unique: true,
     trim: true,
     uppercase: true
+  },
+  password: {
+    type: String,
+    required: false,
+    minlength: [6, 'Password must be at least 6 characters long'],
+    select: false // Don't include password in queries by default (security)
   },
   
   // Work Information
@@ -143,9 +150,27 @@ const deliveryPersonnelSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  onlineAt: {
+    type: Date,
+    default: null
+  },
   lastActive: {
     type: Date,
     default: Date.now
+  },
+  lastLogout: {
+    type: Date,
+    default: null
+  },
+  totalOnlineTime: {
+    type: Number,
+    default: 0, // Total online time in minutes
+    min: [0, 'Total online time cannot be negative']
+  },
+  todayOnlineTime: {
+    type: Number,
+    default: 0, // Today's online time in minutes
+    min: [0, 'Today online time cannot be negative']
   },
   
   // Work Schedule
@@ -245,7 +270,26 @@ deliveryPersonnelSchema.virtual('completionRate').get(function() {
 });
 
 // Pre-save middleware
-deliveryPersonnelSchema.pre('save', function(next) {
+deliveryPersonnelSchema.pre('save', async function(next) {
+  // Hash password if it's modified and not already hashed
+  if (this.isModified('password') && this.password) {
+    // Check if password is already hashed (bcrypt hashes are 60 characters and start with $2a$, $2b$, or $2y$)
+    const isAlreadyHashed = this.password.length >= 60 && 
+                            (this.password.startsWith('$2a$') || 
+                             this.password.startsWith('$2b$') || 
+                             this.password.startsWith('$2y$'));
+    
+    if (!isAlreadyHashed) {
+      try {
+        const salt = await bcrypt.genSalt(12);
+        this.password = await bcrypt.hash(this.password, salt);
+      } catch (error) {
+        return next(error);
+      }
+    }
+    // If already hashed, skip hashing (prevents double hashing)
+  }
+  
   // Update zone name if zone is populated
   if (this.zone && this.zone.name) {
     this.zoneName = this.zone.name;
@@ -329,8 +373,16 @@ deliveryPersonnelSchema.methods.updateLocation = async function(latitude, longit
 
 // Instance method to go offline
 deliveryPersonnelSchema.methods.goOffline = async function() {
+  // Calculate time spent online if was online
+  if (this.isOnline && this.onlineAt) {
+    const onlineDuration = Math.floor((new Date() - this.onlineAt) / (1000 * 60)); // minutes
+    this.totalOnlineTime += onlineDuration;
+    this.todayOnlineTime += onlineDuration;
+  }
+  
   this.isOnline = false;
   this.status = 'off_duty';
+  this.onlineAt = null;
   this.lastActive = new Date();
   
   await this.save();
@@ -340,6 +392,7 @@ deliveryPersonnelSchema.methods.goOffline = async function() {
 deliveryPersonnelSchema.methods.goOnline = async function() {
   this.isOnline = true;
   this.status = 'on_duty';
+  this.onlineAt = new Date();
   this.lastActive = new Date();
   
   await this.save();
@@ -359,6 +412,11 @@ deliveryPersonnelSchema.methods.updatePerformance = async function(deliveryTime,
   this.averageDeliveryTime = Math.round(totalTime / this.completedDeliveries);
   
   await this.save();
+};
+
+// Instance method to compare password
+deliveryPersonnelSchema.methods.comparePassword = async function(candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
 };
 
 export default mongoose.model('DeliveryPersonnel', deliveryPersonnelSchema);

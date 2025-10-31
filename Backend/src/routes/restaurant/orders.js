@@ -8,6 +8,7 @@ import {
   getOrderHistory,
   acceptOrder,
   rejectOrder,
+  startPreparing,
   markAsReady
 } from '../../controllers/restaurant/orderController.js';
 
@@ -36,6 +37,9 @@ router.route('/:id/accept')
 
 router.route('/:id/reject')
   .put(rejectOrder);
+
+router.route('/:id/prepare')
+  .put(startPreparing);
 
 router.route('/:id/ready')
   .put(markAsReady);

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Search, Filter, Download, Eye, CheckCircle, XCircle, Clock, FileText } from 'lucide-react';
-import Card from '../../ui/Card';
-import Button from '../../ui/Button';
-import Badge from '../../ui/Badge';
-import Table from '../../ui/Table';
-import Modal from '../../ui/Modal';
+import Card from '../../../components/common/ui/Card';
+import Button from '../../../components/common/ui/Button';
+import Badge from '../../../components/common/ui/Badge';
+import Table from '../../../components/common/Table';
+import Modal from '../../../components/common/Modal';
 
 const DocumentManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');

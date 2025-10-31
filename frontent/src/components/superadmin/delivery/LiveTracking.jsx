@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { superadminApi } from '../../../services/api/superadminApi';
 import { trackingApi } from '../../../services/api/deliveryApi';
-import LoadingSpinner from '../../common/LoadingSpinner';
+import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import { formatCurrency } from '../../../utils/currency';
 
 const LiveTracking = ({ user, onLogout }) => {
@@ -135,7 +135,7 @@ const LiveTracking = ({ user, onLogout }) => {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [fetchTrackingData, autoRefresh]);
+  }, [autoRefresh]);
 
   // Filter deliveries
   const filteredDeliveries = Array.isArray(activeDeliveries) ? activeDeliveries.filter(delivery => {

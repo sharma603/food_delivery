@@ -6,13 +6,10 @@ import {
   Download,
   RefreshCw,
   Eye,
-  Edit,
-  Trash2,
   CheckCircle,
   XCircle,
   Clock,
   AlertCircle,
-  MoreHorizontal,
   ChevronLeft,
   ChevronRight,
   Calendar,
@@ -22,17 +19,11 @@ import {
   CreditCard,
   Package,
   Truck,
-  Star,
   MessageSquare,
-  FileText,
-  BarChart3,
   TrendingUp,
   TrendingDown,
-  DollarSign,
   ShoppingBag,
-  Users,
-  Store,
-  Activity
+  Store
 } from 'lucide-react';
 import './AllOrders.css';
 
@@ -46,9 +37,8 @@ const AllOrders = ({ user, onLogout }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [stats, setStats] = useState(null);
-  const [apiStatus, setApiStatus] = useState('checking'); // 'checking', 'connected', 'error'
   const [showImageModal, setShowImageModal] = useState(false);
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedImage] = useState(null);
   const [exporting, setExporting] = useState(false);
   
   // Pagination
@@ -138,7 +128,6 @@ const AllOrders = ({ user, onLogout }) => {
       
       console.log('AllOrders API Response:', response);
       
-      setApiStatus('connected');
       
       // Handle different API response structures
       if (response.data) {
@@ -199,7 +188,6 @@ const AllOrders = ({ user, onLogout }) => {
     } catch (error) {
       console.error('Error fetching orders:', error);
       
-      setApiStatus('error');
       
       // Only show error message, don't use mock data immediately
       setError(`Failed to fetch orders: ${error.message}`);
@@ -212,7 +200,7 @@ const AllOrders = ({ user, onLogout }) => {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, itemsPerPage, filters]);
+  }, [currentPage, itemsPerPage, filters, calculateStats]);
 
   // Fetch order statistics
   const fetchStats = useCallback(async () => {
@@ -272,7 +260,8 @@ const AllOrders = ({ user, onLogout }) => {
     fetchOrders();
     fetchStats();
     fetchRestaurants();
-  }, [fetchOrders, fetchStats, fetchRestaurants]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
 
   // Handle filter changes
@@ -306,11 +295,6 @@ const AllOrders = ({ user, onLogout }) => {
     setShowOrderModal(true);
   };
 
-  // Handle image click to show larger image
-  const handleImageClick = (imageUrl, itemName) => {
-    setSelectedImage({ url: imageUrl, name: itemName });
-    setShowImageModal(true);
-  };
 
   // Handle bulk selection
   const handleBulkSelect = (orderId) => {

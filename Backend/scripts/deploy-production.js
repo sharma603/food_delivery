@@ -12,15 +12,15 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-console.log('🚀 Preparing application for production deployment...\n');
+console.log('Preparing application for production deployment...\n');
 
 // Check if .env file exists
 const envPath = path.join(__dirname, '..', '.env');
 const envTemplatePath = path.join(__dirname, '..', 'env.production.template');
 
 if (!fs.existsSync(envPath)) {
-  console.log('❌ .env file not found!');
-  console.log('📋 Please copy env.production.template to .env and configure your production settings');
+  console.log('✗ .env file not found!');
+  console.log('Please copy env.production.template to .env and configure your production settings');
   console.log(`   cp ${envTemplatePath} ${envPath}`);
   process.exit(1);
 }
@@ -32,14 +32,14 @@ const requiredEnvVars = [
   'NODE_ENV'
 ];
 
-console.log('🔍 Checking environment configuration...');
+console.log('Checking environment configuration...');
 const envContent = fs.readFileSync(envPath, 'utf8');
 const missingVars = requiredEnvVars.filter(varName => 
   !envContent.includes(`${varName}=`) || envContent.includes(`${varName}=`)
 );
 
 if (missingVars.length > 0) {
-  console.log('❌ Missing required environment variables:');
+  console.log('✗ Missing required environment variables:');
   missingVars.forEach(varName => console.log(`   - ${varName}`));
   process.exit(1);
 }
@@ -47,7 +47,7 @@ if (missingVars.length > 0) {
 // Check if uploads directory exists
 const uploadsPath = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsPath)) {
-  console.log('📁 Creating uploads directory...');
+  console.log('Creating uploads directory...');
   fs.mkdirSync(uploadsPath, { recursive: true });
   fs.mkdirSync(path.join(uploadsPath, 'menu-items'), { recursive: true });
   fs.mkdirSync(path.join(uploadsPath, 'restaurant-documents'), { recursive: true });

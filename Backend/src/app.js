@@ -79,13 +79,12 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
 // Rate limiting - AFTER CORS to avoid blocking preflight requests
-// In development, use very lenient rate limiting or skip entirely
+// In development, skip rate limiting entirely
 if (process.env.NODE_ENV === 'development') {
-  console.log('🔧 Development mode: Using lenient rate limiting');
-  // Use the very lenient development rate limiter
-  app.use('/api/', superAdminLimiter); // This is the devRateLimit in development
+  console.log('🔧 Development mode: Skipping rate limiting');
+  // No rate limiting in development
 } else {
-  console.log('🚀 Production mode: Using standard rate limiting');
+  console.log('Production mode: Using standard rate limiting');
   app.use('/api/', apiLimiter);
   // Apply more lenient rate limiting to superadmin routes in production
   app.use('/api/v1/superadmin', superAdminLimiter);
@@ -126,6 +125,12 @@ import authRoutes from './routes/auth.js';
 import adminAuthRoutes from './routes/adminAuth.js';
 import customerAuthRoutes from './routes/customerAuth.js';
 import restaurantAuthRoutes from './routes/restaurantAuth.js';
+
+// Delivery Partner API Routes (Similar structure to mobile customer app)
+// Location: src/delivery/routes/index.js
+// Handles: /api/v1/delivery/auth/* and /api/v1/delivery/*
+import deliveryRoutes from './delivery/routes/index.js';
+
 import userRoutes from './routes/users.js';
 import restaurantsRoutes from './routes/restaurants.js';
 import menuItemRoutes from './routes/menuItems.js';
@@ -163,7 +168,14 @@ const swaggerSpec = swaggerJsdoc({
     info: { title: 'Food Delivery API', version: '1.0.0' },
     servers: [{ url: '/api' }]
   },
-  apis: ['./src/routes/*.js', './src/controllers/*.js']
+  apis: [
+    './src/routes/*.js', 
+    './src/controllers/*.js',
+    './src/mobile/routes/*.js',
+    './src/mobile/controllers/*.js',
+    './src/delivery/routes/*.js',
+    './src/delivery/controllers/*.js'
+  ]
 });
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
@@ -171,6 +183,10 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/admin/auth', adminAuthRoutes);
 app.use('/api/v1/customer/auth', customerAuthRoutes);
 app.use('/api/v1/restaurant/auth', restaurantAuthRoutes);
+
+// Delivery Partner API Routes
+// Structure: /api/v1/delivery/auth/* and /api/v1/delivery/*
+app.use('/api/v1/delivery', deliveryRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/restaurants', restaurantsRoutes);
 app.use('/api/v1/menu-items', menuItemRoutes);
@@ -190,6 +206,8 @@ app.use('/api/v1/superadmin/delivery/zones', deliveryZoneRoutes);
 app.use('/api/v1/superadmin/delivery/personnel', deliveryPersonnelRoutes);
 app.use('/api/v1/superadmin/delivery/tracking', deliveryTrackingRoutes);
 app.use('/api/v1/superadmin/delivery/analytics', deliveryAnalyticsRoutes);
+
+// Delivery Person Routes are now handled in delivery/routes/index.js
 
 // Mobile API Routes
 app.use('/api/v1/mobile', mobileRoutes);

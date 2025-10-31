@@ -10,7 +10,7 @@ import {
   findZoneByPincode,
   bulkUpdateZoneStatus,
   getZonePerformance
-} from '../../controllers/delivery/zoneController.js';
+} from '../../delivery/controllers/zoneController.js';
 
 import { protect, authorize } from '../../middleware/auth.js';
 import { validateZone } from '../../middleware/validation.js';
@@ -21,7 +21,7 @@ const router = express.Router();
 router.use(protect);
 
 // Apply superadmin authorization to all routes
-router.use(authorize(['super_admin']));
+router.use(authorize('super_admin'));
 
 // GET /api/v1/superadmin/delivery/zones - Get all zones
 router.get('/', getAllZones);

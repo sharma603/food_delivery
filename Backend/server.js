@@ -1,5 +1,6 @@
 import app from './src/app.js';
 import dotenv from 'dotenv';
+import mongoose from 'mongoose';
 
 // Load environment variables
 dotenv.config();
@@ -7,19 +8,23 @@ dotenv.config();
 const PORT = process.env.PORT || 5000;
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Food Delivery Backend Server running on port ${PORT}`);
+const server = app.listen(PORT, () => {
+  console.log('='.repeat(60));
+  console.log(`🚀 Food Delivery Backend Server`);
+  console.log('='.repeat(60));
   console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📊 API Documentation: http://localhost:${PORT}/api/docs`);
-  console.log(`🏥 Health Check: http://localhost:${PORT}/health`);
-  console.log(`📍 Nepal Address API: http://localhost:${PORT}/api/v1/address/provinces`);
-  console.log(`📋 Available endpoints:`);
-  console.log(`   GET /api/v1/address/provinces`);
-  console.log(`   GET /api/v1/address/districts/:province`);
-  console.log(`   GET /api/v1/address/municipalities/:province/:district`);
-  console.log(`   GET /api/v1/address/validate/:province/:district/:municipality`);
-  console.log(`   GET /api/v1/address/statistics`);
-  console.log(`   GET /api/v1/address/data`);
+  console.log(`🔗 Server: http://localhost:${PORT}`);
+  console.log(`📊 API Docs: http://localhost:${PORT}/api/docs`);
+  console.log(`🏥 Health: http://localhost:${PORT}/health`);
+  
+  if (process.env.MONGODB_URI) {
+    const mongoInfo = process.env.MONGODB_URI.replace(/\/\/.*@/, '//***:***@');
+    console.log(`💾 MongoDB: ${mongoInfo.split('/').pop()?.split('?')[0] || 'Connected'}`);
+  }
+  
+  console.log('='.repeat(60));
+  console.log('✅ Server is running and ready to accept requests');
+  console.log('='.repeat(60));
 });
 
 // Handle uncaught exceptions
@@ -35,12 +40,25 @@ process.on('unhandledRejection', (err) => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received. Shutting down gracefully...');
-  process.exit(0);
-});
+const gracefulShutdown = (signal) => {
+  console.log(`\n${signal} received. Shutting down gracefully...`);
+  
+  server.close(() => {
+    console.log('✅ HTTP server closed');
+    
+    mongoose.connection.close(false, () => {
+      console.log('✅ MongoDB connection closed');
+      console.log('👋 Server shutdown complete');
+      process.exit(0);
+    });
+  });
+  
+  // Force shutdown after 10 seconds
+  setTimeout(() => {
+    console.error('⚠️  Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+};
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received. Shutting down gracefully...');
-  process.exit(0);
-});
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

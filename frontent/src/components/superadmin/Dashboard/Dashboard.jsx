@@ -172,7 +172,7 @@ const SuperAdminDashboard = () => {
       setLastRefresh(new Date());
       setRequestCooldown(true); // Set cooldown to prevent rapid requests
       
-      console.log('🔄 Fetching dashboard data...', new Date().toLocaleTimeString());
+      console.log('Fetching dashboard data...', new Date().toLocaleTimeString());
  
 
     // Fetch data from multiple endpoints
@@ -180,7 +180,7 @@ const SuperAdminDashboard = () => {
     const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
     
-    console.log('📅 Date range for today:', {
+    console.log('Date range for today:', {
       start: startOfToday.toISOString(),
       end: endOfToday.toISOString()
     });
@@ -198,7 +198,7 @@ const SuperAdminDashboard = () => {
     ]);
 
     // Debug: Log API responses
-    console.log('📊 API Responses Status:', {
+    console.log('API Responses Status:', {
       dashboard: dashboardResponse.status,
       allOrders: allOrdersResponse.status
     });
@@ -218,14 +218,14 @@ const SuperAdminDashboard = () => {
 
  if (dashboardResponse.status === 'fulfilled' && dashboardResponse.value.data) {
    const dashboardData = dashboardResponse.value.data;
-   console.log('📊 Dashboard Response:', dashboardData);
+   console.log('Dashboard Response:', dashboardData);
    
    if (dashboardData.success && dashboardData.data && dashboardData.data.stats) {
      stats = { ...stats, ...dashboardData.data.stats };
-     console.log('✅ Dashboard stats loaded:', stats);
+     console.log('Dashboard stats loaded:', stats);
    }
  } else {
-   console.warn('❌ Dashboard API failed:', dashboardResponse.status, dashboardResponse.reason);
+   console.warn('Dashboard API failed:', dashboardResponse.status, dashboardResponse.reason);
  }
 
  // Process orders data as fallback
@@ -234,19 +234,19 @@ const SuperAdminDashboard = () => {
  
 if (allOrdersResponse.status === 'fulfilled' && allOrdersResponse.value.data) {
   const ordersData = allOrdersResponse.value.data;
-  console.log('📦 Orders Response:', ordersData);
+  console.log('Orders Response:', ordersData);
   
   if (ordersData.success && ordersData.data) {
     allOrders = ordersData.data.orders || ordersData.data || [];
     if (!totalOrdersCount) totalOrdersCount = ordersData.data.total || allOrders.length;
-    console.log('✅ Orders loaded:', allOrders.length);
+    console.log('Orders loaded:', allOrders.length);
   } else if (Array.isArray(ordersData)) {
     allOrders = ordersData;
     if (!totalOrdersCount) totalOrdersCount = ordersData.length;
-    console.log('✅ Orders (array):', allOrders.length);
+    console.log('Orders (array):', allOrders.length);
   }
 } else {
-  console.warn('❌ Orders API failed:', allOrdersResponse.status, allOrdersResponse.reason);
+  console.warn('Orders API failed:', allOrdersResponse.status, allOrdersResponse.reason);
 }
  
  // Use today's orders from the main orders response (already filtered by date)
@@ -339,7 +339,7 @@ setDashboardData(dashboardData);
       // Release cooldown after 5 seconds to prevent rate limiting
       setTimeout(() => {
         setRequestCooldown(false);
-        console.log('✅ Request cooldown released');
+        console.log('Request cooldown released');
       }, 5000);
     }
   }, [requestCooldown]);
@@ -409,7 +409,7 @@ setDashboardData(dashboardData);
  const response = await fetch('http://72.60.206.253:5000/health');
  const endTime = Date.now();
  
- console.log('🏥 Health check:', {
+ console.log('Health check:', {
    status: response.ok ? 'online' : 'offline',
    responseTime: endTime - startTime,
    timestamp: new Date().toLocaleTimeString()
@@ -443,11 +443,11 @@ fetchDashboardData(true);
  let refreshTimer;
  if (autoRefresh) {
  refreshTimer = setInterval(async () => {
-   console.log('🔄 Auto-refresh triggered at:', new Date().toLocaleTimeString());
+   console.log('Auto-refresh triggered at:', new Date().toLocaleTimeString());
    try {
      await fetchDashboardData(false); // No loading state for auto-refresh
    } catch (error) {
-     console.warn('⚠️ Auto-refresh failed, will retry on next interval:', error.message);
+     console.warn('Auto-refresh failed, will retry on next interval:', error.message);
    }
  }, refreshInterval);
  }
@@ -461,7 +461,7 @@ fetchDashboardData(true);
  if (refreshTimer) clearInterval(refreshTimer);
  clearInterval(healthTimer);
  };
- }, [fetchDashboardData, autoRefresh, refreshInterval, checkSystemHealth]);
+  }, [autoRefresh, refreshInterval]);
 
  if (loading) {
  return (

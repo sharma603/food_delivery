@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { superadminApi } from '../../../services/api/superadminApi';
 import { analyticsApi } from '../../../services/api/deliveryApi';
-import LoadingSpinner from '../../common/LoadingSpinner';
+import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import { formatCurrency } from '../../../utils/currency';
 
 const PerformanceAnalytics = ({ user, onLogout }) => {
@@ -199,7 +199,7 @@ const PerformanceAnalytics = ({ user, onLogout }) => {
 
   useEffect(() => {
     fetchPerformanceData();
-  }, [fetchPerformanceData]);
+  }, []);
 
   // Get performance color
   const getPerformanceColor = (performance) => {

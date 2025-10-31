@@ -4,7 +4,7 @@ import Header from '../../common/Header';
 import Table from '../../common/Table';
 import Modal from '../../common/Modal';
 import Form from '../../common/Form';
-import LoadingSpinner from '../../common/LoadingSpinner';
+import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import { apiService as api } from '../../../services/api';
 
 

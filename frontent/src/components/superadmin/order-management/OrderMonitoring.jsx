@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { superadminApi } from '../../../services/api/superadminApi';
 import WebSocketService from '../../../services/webSocketService';
-import LoadingSpinner from '../../common/LoadingSpinner';
+import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import './OrderMonitoring.css';
 
 const OrderMonitoring = ({ user, onLogout }) => {
@@ -12,7 +12,7 @@ const OrderMonitoring = ({ user, onLogout }) => {
   const [realTimeUpdates, setRealTimeUpdates] = useState(true);
   const [alerts, setAlerts] = useState([]);
   const [isPaused, setIsPaused] = useState(false);
-  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -193,7 +193,7 @@ const OrderMonitoring = ({ user, onLogout }) => {
   // Load initial data
   useEffect(() => {
     fetchMonitoringData();
-  }, [fetchMonitoringData]);
+  }, []);
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -204,7 +204,7 @@ const OrderMonitoring = ({ user, onLogout }) => {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [fetchMonitoringData, realTimeUpdates]);
+  }, [realTimeUpdates]);
 
   // Toggle real-time updates
   const toggleRealTimeUpdates = () => {
@@ -273,18 +273,6 @@ const OrderMonitoring = ({ user, onLogout }) => {
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'placed': return 'fas fa-shopping-cart';
-      case 'confirmed': return 'fas fa-check-circle';
-      case 'preparing': return 'fas fa-utensils';
-      case 'ready': return 'fas fa-clock';
-      case 'picked_up': return 'fas fa-truck';
-      case 'delivered': return 'fas fa-check-double';
-      case 'cancelled': return 'fas fa-times-circle';
-      default: return 'fas fa-question-circle';
-    }
-  };
 
   const getTimeAgo = (dateString) => {
     const now = new Date();

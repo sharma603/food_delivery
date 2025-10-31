@@ -11,10 +11,10 @@ import {
   getPersonnelStats,
   bulkUpdatePersonnelStatus,
   getPersonnelPerformance
-} from '../../controllers/delivery/personnelController.js';
+} from '../../delivery/controllers/personnelController.js';
 
 import { protect, authorize } from '../../middleware/auth.js';
-import { validatePersonnel } from '../../middleware/validation.js';
+import { validatePersonnel, validatePersonnelUpdate } from '../../middleware/validation.js';
 
 const router = express.Router();
 
@@ -22,7 +22,7 @@ const router = express.Router();
 router.use(protect);
 
 // Apply superadmin authorization to all routes
-router.use(authorize(['super_admin']));
+router.use(authorize('super_admin'));
 
 // GET /api/v1/superadmin/delivery/personnel - Get all personnel
 router.get('/', getAllPersonnel);
@@ -43,7 +43,7 @@ router.get('/:personnelId/performance', getPersonnelPerformance);
 router.post('/', validatePersonnel, createPersonnel);
 
 // PUT /api/v1/superadmin/delivery/personnel/:personnelId - Update personnel
-router.put('/:personnelId', validatePersonnel, updatePersonnel);
+router.put('/:personnelId', validatePersonnelUpdate, updatePersonnel);
 
 // DELETE /api/v1/superadmin/delivery/personnel/:personnelId - Delete personnel
 router.delete('/:personnelId', deletePersonnel);

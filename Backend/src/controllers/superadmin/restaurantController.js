@@ -81,7 +81,14 @@ export const getAllRestaurants = async (req, res) => {
       isActive: restaurant.isActive,
       createdAt: restaurant.createdAt,
       verifiedBy: restaurant.verifiedBy,
-      verifiedAt: restaurant.verifiedAt
+      verifiedAt: restaurant.verifiedAt,
+      // Account lock information
+      isLocked: restaurant.isLocked(),
+      loginAttempts: restaurant.loginAttempts || 0,
+      lockUntil: restaurant.lockUntil || null,
+      lockTimeLeft: restaurant.lockUntil && restaurant.lockUntil > Date.now() 
+        ? Math.ceil((restaurant.lockUntil - Date.now()) / (60 * 1000)) // minutes
+        : null
     }));
 
     res.json({
@@ -529,6 +536,69 @@ export const deleteRestaurant = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete restaurant'
+    });
+  }
+};
+
+// @desc    Unlock restaurant account (clears login lock)
+// @route   POST /api/v1/superadmin/restaurants/:id/unlock
+// @access  Private (Super Admin)
+export const unlockRestaurantAccount = async (req, res) => {
+  try {
+    const restaurant = await RestaurantUser.findById(req.params.id);
+
+    if (!restaurant) {
+      return res.status(404).json({
+        success: false,
+        message: 'Restaurant not found'
+      });
+    }
+
+    // Check if account is actually locked
+    const wasLocked = restaurant.isLocked();
+    const loginAttempts = restaurant.loginAttempts || 0;
+
+    if (!wasLocked && loginAttempts === 0) {
+      return res.json({
+        success: true,
+        message: 'Account is not locked. No action needed.',
+        data: {
+          _id: restaurant._id,
+          email: restaurant.email,
+          restaurantName: restaurant.restaurantName,
+          isLocked: false,
+          loginAttempts: 0
+        }
+      });
+    }
+
+    // Unlock the account
+    await restaurant.unlockAccount();
+
+    res.json({
+      success: true,
+      message: wasLocked 
+        ? 'Restaurant account unlocked successfully' 
+        : 'Restaurant login attempts reset successfully',
+      data: {
+        _id: restaurant._id,
+        email: restaurant.email,
+        restaurantName: restaurant.restaurantName,
+        wasLocked: wasLocked,
+        previousAttempts: loginAttempts,
+        isLocked: false,
+        loginAttempts: 0,
+        unlockedBy: req.user._id,
+        unlockedAt: new Date()
+      }
+    });
+
+  } catch (error) {
+    console.error('Unlock restaurant account error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to unlock restaurant account',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };

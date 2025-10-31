@@ -19,7 +19,7 @@ import {
   Building
 } from 'lucide-react';
 import { superadminApi } from '../../../services/api/superadminApi';
-import LoadingSpinner from '../../common/LoadingSpinner';
+import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import { formatCurrency } from '../../../utils/currency';
 
 const Settlements = ({ user, onLogout }) => {
@@ -106,7 +106,7 @@ const Settlements = ({ user, onLogout }) => {
 
   useEffect(() => {
     fetchSettlementData();
-  }, [fetchSettlementData]);
+  }, []);
 
   // Filter settlements - ensure settlements is an array
   const filteredSettlements = Array.isArray(settlements) ? settlements.filter(settlement => {

@@ -22,7 +22,9 @@ import {
  Star,
  AlertCircle,
  Calendar,
- FileText
+ FileText,
+ Lock,
+ Unlock
 } from 'lucide-react';
 import api from '../../../utils/api';
 
@@ -39,6 +41,7 @@ const RestaurantList = () => {
  const [deleteLoading, setDeleteLoading] = useState(false);
  const [editLoading, setEditLoading] = useState(false);
  const [editFormData, setEditFormData] = useState({});
+ const [unlockLoading, setUnlockLoading] = useState(false);
 
  useEffect(() => {
  fetchRestaurants();
@@ -89,7 +92,8 @@ const RestaurantList = () => {
   const matchesStatus = statusFilter === 'all' || 
     restaurant.status === statusFilter ||
     (statusFilter === 'open' && restaurant.isOpen === true) ||
-    (statusFilter === 'closed' && restaurant.isOpen === false);
+    (statusFilter === 'closed' && restaurant.isOpen === false) ||
+    (statusFilter === 'locked' && restaurant.isLocked === true);
  
  return matchesSearch && matchesStatus;
  });
@@ -227,6 +231,61 @@ const RestaurantList = () => {
  }
  };
 
+ // Unlock Restaurant Account Handler
+ const handleUnlockAccount = async (restaurant) => {
+ if (!window.confirm(
+ `Are you sure you want to unlock the account for ${restaurant.name || restaurant.restaurantName}?\n\n` +
+ `This will reset login attempts and allow the restaurant to login again.`
+ )) {
+ return;
+ }
+
+ setUnlockLoading(true);
+ try {
+ const response = await api.post(`/superadmin/restaurants/${restaurant._id}/unlock`);
+ if (response.data.success) {
+ // Refresh the restaurant list to get updated data
+ await fetchRestaurants();
+ alert(response.data.message || 'Restaurant account unlocked successfully!');
+ }
+ } catch (err) {
+ console.error('Failed to unlock restaurant account:', err);
+ alert(err.response?.data?.message || 'Failed to unlock restaurant account');
+ } finally {
+ setUnlockLoading(false);
+ }
+ };
+
+ // Lock Status Badge
+ const getLockStatusBadge = (restaurant) => {
+ if (!restaurant.isLocked && (!restaurant.loginAttempts || restaurant.loginAttempts === 0)) {
+ return null; // Don't show badge if not locked and no attempts
+ }
+
+ if (restaurant.isLocked) {
+ return (
+ <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+   <Lock className="w-3 h-3 mr-1" />
+   Locked
+   {restaurant.lockTimeLeft && (
+     <span className="ml-1">({restaurant.lockTimeLeft}m)</span>
+   )}
+ </span>
+ );
+ }
+
+ if (restaurant.loginAttempts > 0) {
+ return (
+ <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+   <AlertCircle className="w-3 h-3 mr-1" />
+   {restaurant.loginAttempts}/10 attempts
+ </span>
+ );
+ }
+
+ return null;
+ };
+
  if (loading) {
  return (
  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -279,6 +338,7 @@ const RestaurantList = () => {
                 <option value="inactive">Inactive</option>
                 <option value="open">Open</option>
                 <option value="closed">Closed</option>
+                <option value="locked">Locked Accounts</option>
  </select>
  </div>
  </div>
@@ -333,6 +393,9 @@ const RestaurantList = () => {
  </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Account Lock
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Operating
@@ -401,6 +464,16 @@ const RestaurantList = () => {
                 {getStatusBadge(restaurant.status)}
               </td>
 
+              {/* Account Lock Status */}
+              <td className="px-6 py-4 whitespace-nowrap">
+                {getLockStatusBadge(restaurant) || (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    <Unlock className="w-3 h-3 mr-1" />
+                    Unlocked
+                  </span>
+                )}
+              </td>
+
               {/* Operating Status */}
               <td className="px-6 py-4 whitespace-nowrap">
                 {getOperatingStatusBadge(restaurant.isOpen)}
@@ -439,6 +512,20 @@ const RestaurantList = () => {
  >
  <Edit className="w-5 h-5" />
  </button>
+ {restaurant.isLocked && (
+ <button
+ onClick={() => handleUnlockAccount(restaurant)}
+ disabled={unlockLoading}
+ className="text-orange-600 hover:text-orange-900 hover:bg-orange-50 p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+ title="Unlock Account"
+ >
+ {unlockLoading ? (
+ <div className="w-5 h-5 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
+ ) : (
+ <Unlock className="w-5 h-5" />
+ )}
+ </button>
+ )}
  <button
  onClick={() => handleDeleteRestaurant(restaurant)}
  className="text-red-600 hover:text-red-900 hover:bg-red-50 p-2 rounded-lg transition-colors"
@@ -546,6 +633,66 @@ const RestaurantList = () => {
  </div>
  </div>
  </div>
+
+ {/* Account Lock Information */}
+ {(selectedRestaurant.isLocked || selectedRestaurant.loginAttempts > 0) && (
+ <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-6 border border-orange-200">
+ <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+ <Lock className="w-5 h-5 text-orange-600" />
+ Account Lock Status
+</h3>
+ <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+ <div>
+ <p className="text-sm text-gray-600 mb-1">Account Status</p>
+ <p className="text-base font-medium text-gray-900">
+ {selectedRestaurant.isLocked ? (
+ <span className="text-red-600">🔒 Locked</span>
+ ) : (
+ <span className="text-green-600">🔓 Unlocked</span>
+ )}
+ </p>
+ </div>
+ <div>
+ <p className="text-sm text-gray-600 mb-1">Failed Login Attempts</p>
+ <p className="text-base font-medium text-gray-900">
+ {selectedRestaurant.loginAttempts || 0} / 10
+ </p>
+ </div>
+ {selectedRestaurant.isLocked && selectedRestaurant.lockTimeLeft && (
+ <div>
+ <p className="text-sm text-gray-600 mb-1">Time Remaining</p>
+ <p className="text-base font-medium text-gray-900">
+ {selectedRestaurant.lockTimeLeft} minutes
+ </p>
+ </div>
+ )}
+ </div>
+ {selectedRestaurant.isLocked && (
+ <div className="mt-4">
+ <button
+ onClick={() => {
+ setShowViewModal(false);
+ handleUnlockAccount(selectedRestaurant);
+ }}
+ disabled={unlockLoading}
+ className="inline-flex items-center px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors gap-2"
+ >
+ {unlockLoading ? (
+ <>
+ <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+ Unlocking...
+ </>
+ ) : (
+ <>
+ <Unlock className="w-4 h-4" />
+ Unlock Account
+ </>
+ )}
+ </button>
+ </div>
+ )}
+ </div>
+ )}
 
  {/* Business Statistics */}
  <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-6">

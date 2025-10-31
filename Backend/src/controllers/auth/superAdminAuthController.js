@@ -64,7 +64,7 @@ export const superAdminLogin = async (req, res) => {
     if (!isPasswordMatch) {
       await createAuditLog({
         user: superAdmin._id,
-        userType: 'SuperAdmin',
+        userType: 'super_admin',
         action: 'login_failed',
         resource: 'super_admin',
         details: { reason: 'invalid_password' },
@@ -128,7 +128,7 @@ export const superAdminLogout = async (req, res) => {
     // Create audit log
     await createAuditLog({
       user: superAdminId,
-      userType: 'Admin',
+      userType: 'super_admin',
       action: 'logout',
       resource: 'super_admin',
       ipAddress: req.ip,

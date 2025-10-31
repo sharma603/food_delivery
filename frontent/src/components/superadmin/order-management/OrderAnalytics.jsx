@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { superadminApi } from '../../../services/api/superadminApi';
 import WebSocketService from '../../../services/webSocketService';
-import LoadingSpinner from '../../common/LoadingSpinner';
+import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import './OrderAnalytics.css';
 
 const OrderAnalytics = ({ user, onLogout }) => {
   // State management
-  const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dateRange, setDateRange] = useState('week');
@@ -121,7 +120,6 @@ const OrderAnalytics = ({ user, onLogout }) => {
           hourlyDistribution: hourlyDistribution
         });
         
-        setAnalytics(analyticsResponse.data.data);
       }
     } catch (error) {
       console.error('Error fetching analytics:', error);
@@ -142,7 +140,7 @@ const OrderAnalytics = ({ user, onLogout }) => {
     } finally {
       setLoading(false);
     }
-  }, [dateRange, selectedMetric]);
+  }, [dateRange]);
 
   // Real-time WebSocket setup
   useEffect(() => {
@@ -182,7 +180,8 @@ const OrderAnalytics = ({ user, onLogout }) => {
   // Load analytics data
   useEffect(() => {
     fetchAnalytics();
-  }, [fetchAnalytics]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-refresh every 60 seconds
   useEffect(() => {
@@ -193,7 +192,8 @@ const OrderAnalytics = ({ user, onLogout }) => {
     }, 60000);
 
     return () => clearInterval(interval);
-  }, [fetchAnalytics, realTimeUpdates]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [realTimeUpdates]);
 
   // Real data for demonstration
   const realData = {

@@ -9,57 +9,57 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const checkHealth = async () => {
-  console.log('🔍 Running Backend Health Check...\n');
+  console.log('Running Backend Health Check...\n');
   
   let allHealthy = true;
   
   // Check environment variables
-  console.log('📋 Environment Variables:');
+  console.log('Environment Variables:');
   const required = ['MONGODB_URI', 'JWT_SECRET'];
   required.forEach(key => {
     const value = process.env[key];
     if (value) {
-      console.log(`✅ ${key}: Configured`);
+      console.log(`✓ ${key}: Configured`);
     } else {
-      console.log(`❌ ${key}: Missing`);
+      console.log(`✗ ${key}: Missing`);
       allHealthy = false;
     }
   });
   
   // Check MongoDB connection
-  console.log('\n🗄️  Database Connection:');
+  console.log('\nDatabase Connection:');
   try {
     const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/food_delivery';
     await mongoose.connect(mongoUri, {
       serverSelectionTimeoutMS: 5000,
       connectTimeoutMS: 5000
     });
-    console.log('✅ MongoDB: Connected');
+    console.log('✓ MongoDB: Connected');
     await mongoose.connection.close();
   } catch (error) {
-    console.log('❌ MongoDB: Connection failed');
+    console.log('✗ MongoDB: Connection failed');
     console.log(`   Error: ${error.message}`);
     allHealthy = false;
   }
   
   // Check Redis connection
-  console.log('\n🔴 Redis Connection:');
+  console.log('\nRedis Connection:');
   try {
     const redis = getRedisClient();
     if (redis.__disabled) {
-      console.log('⚠️  Redis: Disabled (REDIS_URL not set)');
+      console.log('⚠ Redis: Disabled (REDIS_URL not set)');
     } else {
       await redis.ping();
-      console.log('✅ Redis: Connected');
+      console.log('✓ Redis: Connected');
     }
   } catch (error) {
-    console.log('❌ Redis: Connection failed');
+    console.log('✗ Redis: Connection failed');
     console.log(`   Error: ${error.message}`);
     // Redis is optional, so don't mark as unhealthy
   }
   
   // Check port availability
-  console.log('\n🌐 Port Availability:');
+  console.log('\nPort Availability:');
   const port = process.env.PORT || 5000;
   try {
     const net = await import('net');
@@ -70,21 +70,21 @@ const checkHealth = async () => {
       });
       server.on('error', reject);
     });
-    console.log(`✅ Port ${port}: Available`);
+    console.log(`✓ Port ${port}: Available`);
   } catch (error) {
-    console.log(`❌ Port ${port}: In use or unavailable`);
+    console.log(`✗ Port ${port}: In use or unavailable`);
     console.log(`   Error: ${error.message}`);
     allHealthy = false;
   }
   
   // Summary
-  console.log('\n📊 Health Check Summary:');
+  console.log('\nHealth Check Summary:');
   if (allHealthy) {
-    console.log('✅ All critical systems are healthy');
-    console.log('🚀 Backend should start successfully');
+    console.log('✓ All critical systems are healthy');
+    console.log('Backend should start successfully');
   } else {
-    console.log('❌ Some critical systems have issues');
-    console.log('🔧 Please fix the issues above before starting the backend');
+    console.log('✗ Some critical systems have issues');
+    console.log('Please fix the issues above before starting the backend');
   }
   
   process.exit(allHealthy ? 0 : 1);

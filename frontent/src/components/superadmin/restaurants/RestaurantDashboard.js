@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../../common/Header';
 
-import LoadingSpinner from '../../common/LoadingSpinner';
+import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import { apiService as api } from '../../../services/api';
 
 

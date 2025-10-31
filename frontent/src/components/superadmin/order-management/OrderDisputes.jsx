@@ -64,7 +64,7 @@ const OrderDisputes = () => {
   useEffect(() => {
     fetchDisputes();
     fetchAnalytics();
-  }, [fetchDisputes, fetchAnalytics]);
+  }, []);
 
   // Handle filter changes
   const handleFilterChange = (key, value) => {

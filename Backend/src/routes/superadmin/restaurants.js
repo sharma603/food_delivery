@@ -6,7 +6,8 @@ import {
   updateRestaurantStatus,
   updateRestaurant,
   deleteRestaurant,
-  getRestaurantStatusStats
+  getRestaurantStatusStats,
+  unlockRestaurantAccount
 } from '../../controllers/superadmin/restaurantController.js';
 import { protect, authorize } from '../../middleware/auth.js';
 
@@ -29,6 +30,9 @@ router.route('/:id/credentials')
 
 router.route('/:id/status')
   .put(updateRestaurantStatus);
+
+router.route('/:id/unlock')
+  .post(unlockRestaurantAccount);
 
 router.route('/:id')
   .put(updateRestaurant)

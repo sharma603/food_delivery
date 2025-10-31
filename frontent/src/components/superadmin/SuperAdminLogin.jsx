@@ -18,19 +18,31 @@ const SuperAdminLogin = () => {
     setLoading(true);
 
     try {
-      const result = await login(formData.email, formData.password, 'superadmin');
+      const result = await login(formData.email, formData.password, 'super_admin');
+      
+      console.log('Login result:', result);
 
-      if (result.success) {
+      if (result && result.success) {
+        console.log('✅ Login successful, redirecting to dashboard...');
+        // Use a small delay to ensure state is updated, then navigate
+        await new Promise(resolve => setTimeout(resolve, 100));
+        navigate('/admin/dashboard', { replace: true });
+        // Fallback: if navigate doesn't work, use window.location
         setTimeout(() => {
-          navigate('/admin/dashboard', { replace: true });
-        }, 100);
+          if (window.location.pathname.includes('/login')) {
+            console.log('Navigate failed, using window.location');
+            window.location.href = '/admin/dashboard';
+          }
+        }, 500);
       } else {
-        setError(result.message || 'Login failed. Please try again.');
+        const errorMsg = result?.message || 'Login failed. Please try again.';
+        console.error('❌ Login failed:', errorMsg);
+        setError(errorMsg);
+        setLoading(false);
       }
     } catch (err) {
-      console.error('Login error:', err);
-      setError('An unexpected error occurred. Please try again.');
-    } finally {
+      console.error('❌ Login error:', err);
+      setError(err.message || 'An unexpected error occurred. Please try again.');
       setLoading(false);
     }
   };

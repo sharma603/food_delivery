@@ -44,13 +44,20 @@ const orderSchema = new mongoose.Schema({
   paymentMethod: { type: String },
   paymentId: { type: String },
   estimatedDeliveryTime: { type: Date },
+  pickedUpAt: { type: Date },
   actualDeliveryTime: { type: Date },
   deliveryPerson: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   trackingUpdates: [{
     status: { type: String },
     timestamp: { type: Date, default: Date.now },
     message: { type: String }
-  }]
+  }],
+  deliveryOtp: {
+    code: { type: String },
+    expiresAt: { type: Date },
+    resendCount: { type: Number, default: 0 },
+    verified: { type: Boolean, default: false }
+  }
 }, { timestamps: true });
 
 orderSchema.pre('save', function(next) {

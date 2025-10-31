@@ -16,7 +16,7 @@ import {
   Download
 } from 'lucide-react';
 import { superadminApi } from '../../../services/api/superadminApi';
-import LoadingSpinner from '../../common/LoadingSpinner';
+import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import { formatCurrency } from '../../../utils/currency';
 
 const PaymentProcessing = ({ user, onLogout }) => {
@@ -101,7 +101,7 @@ const PaymentProcessing = ({ user, onLogout }) => {
 
   useEffect(() => {
     fetchPaymentData();
-  }, [fetchPaymentData]);
+  }, []);
 
   // Filter transactions - ensure transactions is an array
   const filteredTransactions = Array.isArray(transactions) ? transactions.filter(transaction => {

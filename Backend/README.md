@@ -1,115 +1,205 @@
-# ShareKit - File Sharing Application
+# Food Delivery System - Backend API
 
-A Node.js application for file sharing and user management with JWT authentication.
+A comprehensive backend API for a food delivery system with Nepal address integration, built with Node.js, Express, and MongoDB.
 
-## Features
+## 🚀 Features
 
-- User registration and authentication
-- File upload and management
-- Profile picture upload
-- JWT token-based authentication
-- MongoDB database integration
-- File storage with organized directories
+- **Customer Management**: Registration, authentication, profile management
+- **Restaurant Management**: Restaurant registration, menu management, order processing
+- **Order Management**: Complete order lifecycle from placement to delivery
+- **Payment Integration**: Razorpay and Stripe payment gateways
+- **Address Management**: Nepal-specific address system with provinces, districts, municipalities
+- **Email Services**: Password reset, notifications, and communication
+- **File Upload**: Image uploads with Cloudinary integration
+- **Security**: JWT authentication, rate limiting, input validation
+- **Caching**: Redis integration for performance optimization
 
-## Prerequisites
+## 📋 Prerequisites
 
-- Node.js (v14 or higher)
-- MongoDB (running locally or cloud instance)
-- npm or yarn
+- Node.js (>= 16.0.0)
+- MongoDB (>= 4.0)
+- Redis (optional, for caching)
+- npm (>= 8.0.0)
 
-## Installation
+## 🛠️ Installation
 
-1. Clone the repository
-2. Install dependencies:
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd Backend
+   ```
+
+2. **Install dependencies**
    ```bash
    npm install
    ```
 
-3. Create a `.env` file in the root directory with the following variables:
+3. **Environment Configuration**
+   ```bash
+   cp env.example .env
    ```
-   DB_URL=mongodb://localhost:27017/sharekit
-   JWT=your_jwt_secret_key_here_change_this_in_production
-   PORT=4000
+   
+   Edit `.env` file with your configuration:
+   ```env
+   NODE_ENV=production
+   PORT=5000
+   MONGODB_URI=mongodb://localhost:27017/food_delivery
+   JWT_SECRET=your-super-secure-jwt-secret-key
+   EMAIL_USER=your-email@gmail.com
+   EMAIL_PASS=your-app-password
+   # ... other configurations
    ```
 
-4. Start the server:
+4. **Database Setup**
    ```bash
+   # Start MongoDB service
+   # Create database: food_delivery
+   ```
+
+5. **Start the server**
+   ```bash
+   # Development
+   npm run dev
+   
+   # Production
    npm start
    ```
 
-## API Endpoints
+## 🔧 Environment Variables
 
-### Authentication
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `NODE_ENV` | Environment mode | Yes | `development` |
+| `PORT` | Server port | No | `5000` |
+| `MONGODB_URI` | MongoDB connection string | Yes | - |
+| `JWT_SECRET` | JWT signing secret | Yes | - |
+| `JWT_EXPIRE` | JWT expiration time | No | `30d` |
+| `EMAIL_HOST` | SMTP host | Yes | - |
+| `EMAIL_USER` | SMTP username | Yes | - |
+| `EMAIL_PASS` | SMTP password | Yes | - |
+| `FRONTEND_URL` | Frontend URL for reset links | Yes | - |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name | Yes | - |
+| `CLOUDINARY_API_KEY` | Cloudinary API key | Yes | - |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret | Yes | - |
 
-- `POST /api/signup` - Register a new user
-  - Body: `{ "fullname": "string", "email": "string", "password": "string" }`
+## 📚 API Documentation
 
-- `POST /api/login` - Login user
-  - Body: `{ "email": "string", "password": "string" }`
+### Authentication Endpoints
 
-- `POST /api/verifytoken` - Verify JWT token
-  - Body: `{ "token": "string" }`
+#### Customer Authentication
+- `POST /api/v1/mobile/auth/register` - Customer registration
+- `POST /api/v1/mobile/auth/login` - Customer login
+- `POST /api/v1/mobile/auth/forgot-password` - Request password reset
+- `POST /api/v1/mobile/auth/reset-password` - Reset password
+- `GET /api/v1/mobile/auth/profile` - Get customer profile
+- `PUT /api/v1/mobile/auth/profile` - Update customer profile
+- `PUT /api/v1/mobile/auth/change-password` - Change password
+- `POST /api/v1/mobile/auth/logout` - Logout
 
-### File Management
+#### Restaurant Authentication
+- `POST /api/v1/restaurant/auth/register` - Restaurant registration
+- `POST /api/v1/restaurant/auth/login` - Restaurant login
 
-- `POST /api/file` - Upload a file (requires authentication)
-  - Headers: `Authorization: Bearer <token>`
-  - Body: Form data with `files` field
+### Restaurant Endpoints
+- `GET /api/v1/mobile/restaurants` - Get restaurants
+- `GET /api/v1/mobile/restaurants/:id` - Get restaurant details
+- `GET /api/v1/mobile/menu-items` - Get menu items
+- `GET /api/v1/mobile/menu-items/:id` - Get menu item details
 
-- `GET /api/file` - Get user's files (requires authentication)
-  - Headers: `Authorization: Bearer <token>`
+### Order Endpoints
+- `POST /api/v1/mobile/orders` - Create order
+- `GET /api/v1/mobile/orders` - Get customer orders
+- `GET /api/v1/mobile/orders/:id` - Get order details
+- `PUT /api/v1/mobile/orders/:id/status` - Update order status
 
-- `DELETE /api/file/:id` - Delete a file (requires authentication)
-  - Headers: `Authorization: Bearer <token>`
+### Address Endpoints
+- `GET /api/v1/address/provinces` - Get provinces
+- `GET /api/v1/address/districts/:provinceId` - Get districts
+- `GET /api/v1/address/municipalities/:districtId` - Get municipalities
 
-### Profile Management
+## 🔒 Security Features
 
-- `POST /api/upload-Profile-Pic` - Upload profile picture (requires authentication)
-  - Headers: `Authorization: Bearer <token>`
-  - Body: Form data with `image` field
+- **JWT Authentication**: Secure token-based authentication
+- **Password Hashing**: bcrypt with salt rounds
+- **Input Validation**: Express-validator for request validation
+- **Rate Limiting**: Protection against brute force attacks
+- **CORS**: Cross-origin resource sharing configuration
+- **Helmet**: Security headers
+- **MongoDB Sanitization**: Protection against NoSQL injection
+- **File Upload Security**: File type and size validation
 
-## Project Structure
+## 📁 Project Structure
 
 ```
-ShareKit/
-├── controller/          # Route controllers
-├── middleware/          # Custom middleware
-├── model/              # Database models
-├── storage/            # File storage
-│   ├── Files/         # Uploaded files
-│   └── pictures/      # Profile pictures
-├── view/              # Frontend files
-├── index.js           # Main application file
-└── package.json       # Dependencies
+Backend/
+├── src/
+│   ├── config/          # Configuration files
+│   ├── controllers/     # Route controllers
+│   ├── middleware/      # Custom middleware
+│   ├── models/          # Database models
+│   ├── routes/          # API routes
+│   ├── services/        # Business logic services
+│   ├── utils/           # Utility functions
+│   └── mobile/          # Mobile-specific API
+├── uploads/             # File uploads directory
+├── logs/               # Application logs
+├── server.js           # Main server file
+└── package.json        # Dependencies and scripts
 ```
 
-## Error Handling
+## 🚀 Deployment
 
-The application includes comprehensive error handling for:
-- Database connection issues
-- File upload errors
-- Authentication failures
-- Validation errors
-- Missing files or resources
+### Using PM2 (Recommended)
 
-## Security Features
+1. **Install PM2**
+   ```bash
+   npm install -g pm2
+   ```
 
-- Password hashing with bcrypt
-- JWT token authentication
-- File size limits (10MB)
-- Input validation
-- CORS support
+2. **Start with PM2**
+   ```bash
+   pm2 start server.js --name "food-delivery-api"
+   pm2 save
+   pm2 startup
+   ```
 
-## Development
+### Using Docker
 
-To run in development mode with auto-restart:
-```bash
-npm run dev
-```
+1. **Create Dockerfile**
+   ```dockerfile
+   FROM node:18-alpine
+   WORKDIR /app
+   COPY package*.json ./
+   RUN npm ci --only=production
+   COPY . .
+   EXPOSE 5000
+   CMD ["npm", "start"]
+   ```
 
-## Troubleshooting
+2. **Build and run**
+   ```bash
+   docker build -t food-delivery-api .
+   docker run -p 5000:5000 --env-file .env food-delivery-api
+   ```
 
-1. **MongoDB Connection Error**: Ensure MongoDB is running and the connection string is correct
-2. **File Upload Errors**: Check that storage directories exist and have proper permissions
-3. **JWT Errors**: Verify the JWT secret is set in the environment variables
-4. **Port Already in Use**: Change the PORT in .env file or kill the process using the port 
+## 📊 Monitoring
+
+- **Health Check**: `GET /health`
+- **Logs**: Winston logging with different levels
+- **Error Handling**: Centralized error handling middleware
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🆘 Support
+
+For support and questions, please contact the development team or create an issue in the repository.

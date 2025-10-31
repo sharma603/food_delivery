@@ -37,6 +37,7 @@ const OrdersManagement = () => {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
+  const [showOrderFlowGuide, setShowOrderFlowGuide] = useState(false);
 
   // Fetch orders from API
   const fetchOrders = async () => {
@@ -96,6 +97,7 @@ const OrdersManagement = () => {
           deliveryCharge: order.pricing?.deliveryCharge || order.deliveryCharge || 0,
           zone: order.deliveryAddress?.zone || order.zone || 'Zone A - West Bay',
           zoneName: order.deliveryAddress?.zoneName || order.zoneName || 'West Bay',
+          deliveryPerson: order.deliveryPerson || null, // Include delivery person assignment
           createdAt: order.createdAt,
           updatedAt: order.updatedAt,
           // Include original order data for modal
@@ -1198,6 +1200,50 @@ const OrdersManagement = () => {
   // Bulk update order status
   const bulkUpdateOrderStatus = async (newStatus) => {
     try {
+      // Prevent bulk confirm/deliver operations
+      if (newStatus === 'confirmed' || newStatus === 'delivered') {
+        showNotification('This action is not allowed for restaurants', 'error');
+        return;
+      }
+      
+      // Prevent changing status from ready back to preparing
+      if (newStatus === 'preparing') {
+        const selectedOrdersData = orders.filter(order => selectedOrders.includes(order.id));
+        const readyOrders = selectedOrdersData.filter(order => 
+          ['ready', 'picked_up', 'delivered', 'completed'].includes(order.status)
+        );
+        
+        if (readyOrders.length > 0) {
+          showNotification(`Cannot change status to preparing for orders that are marked as ready or later. ${readyOrders.length} order(s) cannot be changed.`, 'error');
+          return;
+        }
+      }
+      
+      // Prevent cancellation of orders that are ready or later OR assigned to delivery person
+      if (newStatus === 'cancelled') {
+        const selectedOrdersData = orders.filter(order => selectedOrders.includes(order.id));
+        const nonCancellableOrders = selectedOrdersData.filter(order => {
+          const isReadyOrLater = ['ready', 'picked_up', 'delivered', 'completed'].includes(order.status);
+          const hasDeliveryPerson = order.deliveryPerson || (order.originalOrder && order.originalOrder.deliveryPerson);
+          return isReadyOrLater || hasDeliveryPerson;
+        });
+        
+        if (nonCancellableOrders.length > 0) {
+          const readyCount = nonCancellableOrders.filter(o => ['ready', 'picked_up', 'delivered', 'completed'].includes(o.status)).length;
+          const deliveryCount = nonCancellableOrders.filter(o => o.deliveryPerson || (o.originalOrder && o.originalOrder.deliveryPerson)).length;
+          let message = '';
+          if (readyCount > 0 && deliveryCount > 0) {
+            message = `Cannot cancel ${nonCancellableOrders.length} order(s): ${readyCount} marked as ready or later, ${deliveryCount} assigned to delivery person.`;
+          } else if (readyCount > 0) {
+            message = `Cannot cancel orders that are marked as ready or later. ${readyCount} order(s) cannot be cancelled.`;
+          } else {
+            message = `Cannot cancel orders that have been assigned to a delivery person. ${deliveryCount} order(s) cannot be cancelled.`;
+          }
+          showNotification(message, 'error');
+          return;
+        }
+      }
+      
       const promises = selectedOrders.map(orderId => 
         api.put(`/restaurant/orders/${orderId}`, { status: newStatus })
       );
@@ -1228,6 +1274,32 @@ const OrdersManagement = () => {
   // Update order status
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
+      const order = orders.find(o => o.id === orderId);
+      
+      // Prevent changing status from ready back to preparing
+      if (newStatus === 'preparing' && order && ['ready', 'picked_up', 'delivered', 'completed'].includes(order.status)) {
+        showNotification('Cannot change order status from ready back to preparing. Once marked as ready, status cannot be changed back.', 'error');
+        return;
+      }
+      
+      // Show confirmation for critical actions
+      if (newStatus === 'cancelled') {
+        if (order) {
+          const hasDeliveryPerson = order.deliveryPerson || (order.originalOrder && order.originalOrder.deliveryPerson);
+          if (hasDeliveryPerson) {
+            showNotification('Cannot cancel order that has been assigned to a delivery person. Please contact support if cancellation is necessary.', 'error');
+            return;
+          }
+          if (['ready', 'picked_up', 'delivered', 'completed'].includes(order.status)) {
+            showNotification('Cannot cancel order after it has been marked as ready. Order must be cancelled before marking as ready.', 'error');
+            return;
+          }
+        }
+        
+        if (!window.confirm('Are you sure you want to cancel this order?')) {
+          return;
+        }
+      }
       
       const response = await api.put(`/restaurant/orders/${orderId}`, { 
         status: newStatus
@@ -1240,13 +1312,20 @@ const OrdersManagement = () => {
           order.id === orderId ? { ...order, status: newStatus, updatedAt: new Date().toISOString() } : order
         ));
         
-        // Show success notification
-        showNotification(`Order status updated to ${newStatus}`, 'success');
+        // Show success notification with appropriate message
+        let statusMessage = newStatus;
+        if (newStatus === 'confirmed') statusMessage = 'accepted';
+        else if (newStatus === 'preparing') statusMessage = 'preparation started';
+        else if (newStatus === 'ready') statusMessage = 'marked as ready';
+        
+        showNotification(`Order ${statusMessage} successfully`, 'success');
       } else {
-        showNotification('Failed to update order status', 'error');
+        const errorMsg = response.data.message || 'Failed to update order status';
+        showNotification(errorMsg, 'error');
       }
     } catch (error) {
-      showNotification('Error updating order status', 'error');
+      const errorMsg = error.response?.data?.message || error.message || 'Error updating order status';
+      showNotification(errorMsg, 'error');
     }
   };
 
@@ -1323,9 +1402,113 @@ const OrdersManagement = () => {
                   <Printer className="w-4 h-4" />
                   Print
                 </button>
+                <button
+                  onClick={() => setShowOrderFlowGuide(!showOrderFlowGuide)}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                  title="View Order Flow Guide"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span className="hidden sm:inline">Order Flow</span>
+                </button>
               </div>
             </div>
           </div>
+
+          {/* Order Flow Guide */}
+          {showOrderFlowGuide && (
+            <div className="mb-6 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-6 shadow-lg">
+              <div className="flex items-start justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <Package className="w-6 h-6 text-orange-600" />
+                  Order Flow Guide - What to Do When You Receive an Order
+                </h2>
+                <button
+                  onClick={() => setShowOrderFlowGuide(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="bg-white rounded-lg p-4 border-l-4 border-orange-500">
+                  <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <span className="bg-orange-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">1</span>
+                    When Order Arrives (Status: Pending/Placed)
+                  </h3>
+                  <ul className="ml-8 space-y-2 text-gray-700">
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span><strong>Review Order:</strong> Check customer details, items, special instructions, and delivery address</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span><strong>First Action:</strong> Click <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-800 rounded font-medium text-sm"><Package className="w-4 h-4" />Start Preparing</span> button</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span>Order automatically gets <strong>confirmed</strong> and status changes to <strong>Preparing</strong></span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <XCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                      <span><strong>OR Cancel:</strong> If you cannot fulfill the order, click <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 rounded font-medium text-sm"><XCircle className="w-4 h-4" />Cancel Order</span> (only before starting preparation)</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="bg-white rounded-lg p-4 border-l-4 border-blue-500">
+                  <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <span className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">2</span>
+                    During Preparation (Status: Preparing)
+                  </h3>
+                  <ul className="ml-8 space-y-2 text-gray-700">
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span>Start cooking/preparing the items from the order</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <XCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                      <span><strong>Cannot cancel</strong> at this stage - order is committed</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="bg-white rounded-lg p-4 border-l-4 border-purple-500">
+                  <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <span className="bg-purple-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">3</span>
+                    When Order is Ready (Status: Ready)
+                  </h3>
+                  <ul className="ml-8 space-y-2 text-gray-700">
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span><strong>Click:</strong> <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 rounded font-medium text-sm"><AlertCircle className="w-4 h-4" />Mark Ready</span> button when order is fully prepared and packaged</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span>Customer and delivery persons are <strong>automatically notified</strong></span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <AlertCircle className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                      <span><strong>⚠️ Important:</strong> Once marked as ready, you <strong>CANNOT</strong> change status back to preparing or cancel</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <h3 className="font-semibold text-yellow-900 mb-2 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-yellow-600" />
+                    Important Restrictions
+                  </h3>
+                  <ul className="ml-6 space-y-1 text-yellow-800 text-sm">
+                    <li>❌ Cannot cancel after starting preparation</li>
+                    <li>❌ Cannot cancel if order assigned to delivery person</li>
+                    <li>❌ Cannot change status from ready back to preparing</li>
+                    <li>❌ Cannot mark orders as delivered (only delivery person can)</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Statistics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -1420,7 +1603,23 @@ const OrdersManagement = () => {
           </div>
 
           {/* Bulk Actions */}
-          {showBulkActions && (
+          {showBulkActions && (() => {
+            // Check if any selected orders are in ready status or later OR assigned to delivery person (cannot be cancelled)
+            const selectedOrdersData = orders.filter(order => selectedOrders.includes(order.id));
+            const hasNonCancellableOrders = selectedOrdersData.some(order => {
+              const isReadyOrLater = ['ready', 'picked_up', 'delivered', 'completed'].includes(order.status);
+              const hasDeliveryPerson = order.deliveryPerson || (order.originalOrder && order.originalOrder.deliveryPerson);
+              return isReadyOrLater || hasDeliveryPerson;
+            });
+            const canCancel = !hasNonCancellableOrders;
+            
+            // Check if any selected orders are ready or later (cannot change to preparing)
+            const hasReadyOrLaterOrders = selectedOrdersData.some(order => 
+              ['ready', 'picked_up', 'delivered', 'completed'].includes(order.status)
+            );
+            const canStartPreparing = !hasReadyOrLaterOrders;
+            
+            return (
             <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
@@ -1428,36 +1627,44 @@ const OrdersManagement = () => {
                     {selectedOrders.length} order{selectedOrders.length !== 1 ? 's' : ''} selected
                   </span>
                   <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => bulkUpdateOrderStatus('confirmed')}
-                      className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                      Confirm Selected
-                    </button>
-                    <button
-                      onClick={() => bulkUpdateOrderStatus('preparing')}
-                      className="px-3 py-1.5 bg-orange-600 text-white text-xs font-medium rounded-lg hover:bg-orange-700 transition-colors"
-                    >
-                      Start Preparing
-                    </button>
+                    {canStartPreparing ? (
+                      <button
+                        onClick={() => bulkUpdateOrderStatus('preparing')}
+                        className="px-3 py-1.5 bg-orange-600 text-white text-xs font-medium rounded-lg hover:bg-orange-700 transition-colors"
+                      >
+                        Start Preparing
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        className="px-3 py-1.5 bg-gray-400 text-white text-xs font-medium rounded-lg cursor-not-allowed opacity-50"
+                        title="Cannot change status to preparing for orders that are marked as ready or later"
+                      >
+                        Start Preparing
+                      </button>
+                    )}
                     <button
                       onClick={() => bulkUpdateOrderStatus('ready')}
                       className="px-3 py-1.5 bg-purple-600 text-white text-xs font-medium rounded-lg hover:bg-purple-700 transition-colors"
                     >
                       Mark Ready
                     </button>
-                    <button
-                      onClick={() => bulkUpdateOrderStatus('delivered')}
-                      className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      Mark Delivered
-                    </button>
-                    <button
-                      onClick={() => bulkUpdateOrderStatus('cancelled')}
-                      className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors"
-                    >
-                      Cancel Selected
-                    </button>
+                    {canCancel ? (
+                      <button
+                        onClick={() => bulkUpdateOrderStatus('cancelled')}
+                        className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors"
+                      >
+                        Cancel Selected
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        className="px-3 py-1.5 bg-gray-400 text-white text-xs font-medium rounded-lg cursor-not-allowed opacity-50"
+                        title="Cannot cancel orders that are marked as ready or later, or assigned to a delivery person"
+                      >
+                        Cancel Selected
+                      </button>
+                    )}
                   </div>
                 </div>
                 <button
@@ -1471,7 +1678,8 @@ const OrdersManagement = () => {
                 </button>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* Orders Table */}
           <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
@@ -1617,13 +1825,22 @@ const OrdersManagement = () => {
                               <FileText className="w-4 h-4" />
                             </button>
                             {(order.status === 'pending' || order.status === 'placed') && (
-                              <button
-                                onClick={() => updateOrderStatus(order.id, 'confirmed')}
-                                className="p-2 text-green-600 hover:text-green-900 hover:bg-green-50 rounded-lg transition-all duration-200"
-                                title="Confirm Order"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => updateOrderStatus(order.id, 'preparing')}
+                                  className="p-2 text-orange-600 hover:text-orange-900 hover:bg-orange-50 rounded-lg transition-all duration-200"
+                                  title="Start Preparing"
+                                >
+                                  <Package className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                                  className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-all duration-200"
+                                  title="Cancel Order"
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                </button>
+                              </>
                             )}
                             {order.status === 'confirmed' && (
                               <button
@@ -1636,29 +1853,26 @@ const OrdersManagement = () => {
                             )}
                             {order.status === 'preparing' && (
                               <button
-                                onClick={() => updateOrderStatus(order.id, 'ready')}
+                                onClick={async () => {
+                                  try {
+                                    const response = await api.put(`/restaurant/orders/${order.id}/ready`);
+                                    if (response.data.success) {
+                                      setOrders(orders.map(o => 
+                                        o.id === order.id ? { ...o, status: 'ready', updatedAt: new Date().toISOString() } : o
+                                      ));
+                                      showNotification('Order marked as ready for pickup', 'success');
+                                    } else {
+                                      showNotification(response.data.message || 'Failed to mark order as ready', 'error');
+                                    }
+                                  } catch (error) {
+                                    const errorMsg = error.response?.data?.message || error.message || 'Error marking order as ready';
+                                    showNotification(errorMsg, 'error');
+                                  }
+                                }}
                                 className="p-2 text-purple-600 hover:text-purple-900 hover:bg-purple-50 rounded-lg transition-all duration-200"
                                 title="Mark Ready for Pickup"
                               >
                                 <AlertCircle className="w-4 h-4" />
-                              </button>
-                            )}
-                            {order.status === 'ready' && (
-                              <button
-                                onClick={() => updateOrderStatus(order.id, 'delivered')}
-                                className="p-2 text-green-600 hover:text-green-900 hover:bg-green-50 rounded-lg transition-all duration-200"
-                                title="Mark Delivered"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                              </button>
-                            )}
-                            {(order.status === 'pending' || order.status === 'placed' || order.status === 'confirmed') && (
-                              <button
-                                onClick={() => updateOrderStatus(order.id, 'cancelled')}
-                                className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-all duration-200"
-                                title="Cancel Order"
-                              >
-                                <XCircle className="w-4 h-4" />
                               </button>
                             )}
                           </div>

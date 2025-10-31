@@ -5,7 +5,10 @@ import responseHandler from '../utils/responseHandler.js';
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return responseHandler.validationErrorResponse(res, errors.array().map(err => err.msg).join(', '));
+    console.log('Validation errors:', errors.array());
+    const errorMessages = errors.array().map(err => err.msg);
+    console.log('Error messages:', errorMessages);
+    return responseHandler.validationErrorResponse(res, errorMessages, 'Validation failed');
   }
   next();
 };
@@ -45,8 +48,8 @@ const validateZone = [
     .custom((pincodes) => {
       if (pincodes && Array.isArray(pincodes)) {
         for (const pincode of pincodes) {
-          if (typeof pincode !== 'string' || !/^\d{5}$/.test(pincode)) {
-            throw new Error('Each pincode must be a 5-digit string');
+          if (typeof pincode !== 'string' || !/^\d{4,5}$/.test(pincode)) {
+            throw new Error('Each pincode must be a 4 or 5-digit string');
           }
         }
       }
@@ -111,8 +114,24 @@ const validatePersonnel = [
     .withMessage('Employee ID must contain only uppercase letters and numbers'),
   
   body('zone')
-    .isMongoId()
-    .withMessage('Valid zone ID is required'),
+    .notEmpty()
+    .withMessage('Zone assignment is required')
+    .custom(async (value) => {
+      // Allow both ObjectId and zone name
+      const mongoose = (await import('mongoose')).default;
+      if (!mongoose.Types.ObjectId.isValid(value)) {
+        // If not a valid ObjectId, check if it's a valid zone name
+        const Zone = (await import('../models/Zone.js')).default;
+        const zone = await Zone.findOne({ 
+          name: { $regex: new RegExp(`^${value}$`, 'i') },
+          status: 'active'
+        });
+        if (!zone) {
+          throw new Error('Invalid zone. Please select a valid zone from the dropdown.');
+        }
+      }
+      return true;
+    }),
   
   body('vehicleType')
     .isIn(['Motorcycle', 'Bicycle', 'Car', 'Scooter', 'E-bike'])
@@ -148,6 +167,16 @@ const validatePersonnel = [
     .optional()
     .isIn(['active', 'inactive', 'on_duty', 'off_duty', 'suspended'])
     .withMessage('Status must be one of: active, inactive, on_duty, off_duty, suspended'),
+  
+  body('documents.licenseNumber')
+    .optional()
+    .isLength({ min: 2, max: 20 })
+    .withMessage('License number must be between 2 and 20 characters'),
+  
+  body('password')
+    .optional()
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters long'),
   
   handleValidationErrors
 ];
@@ -331,9 +360,93 @@ const validateDelay = [
   handleValidationErrors
 ];
 
+// Personnel update validation (more lenient for updates)
+const validatePersonnelUpdate = [
+  body('name')
+    .optional()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Name must be between 2 and 100 characters'),
+  
+  body('email')
+    .optional()
+    .isEmail()
+    .withMessage('Please provide a valid email address')
+    .normalizeEmail(),
+  
+  body('phone')
+    .optional()
+    .matches(/^\+?[1-9]\d{1,14}$/)
+    .withMessage('Please provide a valid phone number'),
+  
+  body('employeeId')
+    .optional()
+    .isLength({ min: 3, max: 20 })
+    .withMessage('Employee ID must be between 3 and 20 characters')
+    .matches(/^[A-Z0-9]+$/)
+    .withMessage('Employee ID must contain only uppercase letters and numbers'),
+  
+  body('zone')
+    .optional()
+    .isMongoId()
+    .withMessage('Valid zone ID is required'),
+  
+  body('vehicleType')
+    .optional()
+    .isIn(['Motorcycle', 'Bicycle', 'Car', 'Scooter', 'E-bike'])
+    .withMessage('Vehicle type must be one of: Motorcycle, Bicycle, Car, Scooter, E-bike'),
+  
+  body('vehicleNumber')
+    .optional()
+    .isLength({ min: 2, max: 20 })
+    .withMessage('Vehicle number must be between 2 and 20 characters'),
+  
+  body('licenseNumber')
+    .optional()
+    .isLength({ min: 2, max: 20 })
+    .withMessage('License number must be between 2 and 20 characters'),
+  
+  body('status')
+    .optional()
+    .isIn(['active', 'inactive', 'on_duty', 'off_duty', 'suspended'])
+    .withMessage('Invalid status provided'),
+  
+  body('rating')
+    .optional()
+    .isFloat({ min: 0, max: 5 })
+    .withMessage('Rating must be between 0 and 5'),
+  
+  body('totalDeliveries')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('Total deliveries must be a non-negative integer'),
+  
+  body('totalEarnings')
+    .optional()
+    .isFloat({ min: 0 })
+    .withMessage('Total earnings must be a non-negative number'),
+  
+  body('isAvailable')
+    .optional()
+    .isBoolean()
+    .withMessage('isAvailable must be a boolean'),
+  
+  body('isOnline')
+    .optional()
+    .isBoolean()
+    .withMessage('isOnline must be a boolean'),
+  
+  body('password')
+    .optional()
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters long'),
+  
+  handleValidationErrors
+];
+
 export {
   validateZone,
   validatePersonnel,
+  validatePersonnelUpdate,
   validateDelivery,
   validateAnalytics,
   validateLocation,

@@ -12,7 +12,7 @@ import {
   getRevenueAnalytics,
   getCustomerSatisfactionAnalytics,
   generateAnalyticsReport
-} from '../../controllers/delivery/analyticsController.js';
+} from '../../delivery/controllers/analyticsController.js';
 
 import { protect, authorize } from '../../middleware/auth.js';
 
@@ -22,7 +22,7 @@ const router = express.Router();
 router.use(protect);
 
 // Apply superadmin authorization to all routes
-router.use(authorize(['super_admin']));
+router.use(authorize('super_admin'));
 
 // GET /api/v1/superadmin/delivery/analytics/overall - Get overall statistics
 router.get('/overall', getOverallStats);

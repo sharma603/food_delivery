@@ -3,8 +3,8 @@ import api from '../../utils/api';
 // Zone Management API
 export const zoneApi = {
   // Get all zones
-  getAllZones: async () => {
-    const response = await api.get('/superadmin/delivery/zones');
+  getAllZones: async (params = {}) => {
+    const response = await api.get('/superadmin/delivery/zones', { params });
     return response.data;
   },
 

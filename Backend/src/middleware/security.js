@@ -8,45 +8,25 @@ import { getRedisClient } from '../config/redis.js';
 // Redis-based rate limiting store
 const redis = getRedisClient();
 
-// Custom Redis store for rate limiting
-const createRedisStore = () => {
+// Simple in-memory store for development
+const createMemoryStore = () => {
+  const store = new Map();
   return {
     async increment(key) {
-      try {
-        if (redis.__disabled) {
-          // Fallback to in-memory if Redis is disabled
-          return { totalHits: 1, resetTime: new Date(Date.now() + 60000) };
-        }
-        
-        const current = await redis.incr(key);
-        if (current === 1) {
-          await redis.expire(key, 60); // 1 minute TTL
-        }
-        return { totalHits: current, resetTime: new Date(Date.now() + 60000) };
-      } catch (error) {
-        console.warn('Redis rate limit error:', error.message);
-        return { totalHits: 1, resetTime: new Date(Date.now() + 60000) };
-      }
+      const current = (store.get(key) || 0) + 1;
+      store.set(key, current);
+      return { totalHits: current, resetTime: new Date(Date.now() + 60000) };
     },
     
     async decrement(key) {
-      try {
-        if (!redis.__disabled) {
-          await redis.decr(key);
-        }
-      } catch (error) {
-        console.warn('Redis decrement error:', error.message);
+      const current = store.get(key) || 0;
+      if (current > 0) {
+        store.set(key, current - 1);
       }
     },
     
     async resetKey(key) {
-      try {
-        if (!redis.__disabled) {
-          await redis.del(key);
-        }
-      } catch (error) {
-        console.warn('Redis reset error:', error.message);
-      }
+      store.delete(key);
     }
   };
 };
@@ -56,7 +36,7 @@ const createRateLimit = (windowMs = 15 * 60 * 1000, max = 100) => {
   return rateLimit({
     windowMs,
     max,
-    store: createRedisStore(),
+    store: createMemoryStore(), // Use simple memory store
     message: {
       success: false,
       message: 'Too many requests from this IP, please try again later.'
@@ -73,12 +53,14 @@ const createRateLimit = (windowMs = 15 * 60 * 1000, max = 100) => {
 // Development rate limiter (very lenient)
 const devRateLimit = createRateLimit(1 * 60 * 1000, 50000); // 50,000 requests per minute in development
 
-// Auth rate limiting (stricter)
-const authLimiter = createRateLimit(15 * 60 * 1000, 5); // 5 requests per 15 minutes
+// Auth rate limiting (stricter) - Use no-op limiter in dev
+const authLimiter = process.env.NODE_ENV === 'development' 
+  ? noOpRateLimit 
+  : createRateLimit(15 * 60 * 1000, 50); // 50 requests per 15 minutes (increased)
 
-// General API rate limiting - Use development limiter in dev, production limiter in production
+// General API rate limiting - Use no-op limiter in dev, production limiter in production
 const apiLimiter = process.env.NODE_ENV === 'development' 
-  ? devRateLimit 
+  ? noOpRateLimit 
   : createRateLimit(
       parseInt(process.env.RATE_LIMIT_WINDOW) * 60 * 1000 || 15 * 60 * 1000,
       parseInt(process.env.RATE_LIMIT_MAX) || 50
@@ -86,7 +68,7 @@ const apiLimiter = process.env.NODE_ENV === 'development'
 
 // Super admin rate limiting (more lenient for admin operations)
 const superAdminLimiter = process.env.NODE_ENV === 'development'
-  ? devRateLimit
+  ? noOpRateLimit
   : createRateLimit(
       15 * 60 * 1000, // 15 minutes
       200
@@ -130,11 +112,20 @@ const devBypass = (req, res, next) => {
   next();
 };
 
+// No-op rate limiter for development
+const noOpRateLimit = (req, res, next) => {
+  if (process.env.NODE_ENV === 'development') {
+    return next(); // Skip rate limiting entirely in development
+  }
+  next();
+};
+
 export {
   apiLimiter,
   authLimiter,
   superAdminLimiter,
   devRateLimit,
   devBypass,
+  noOpRateLimit,
   securityMiddleware
 };

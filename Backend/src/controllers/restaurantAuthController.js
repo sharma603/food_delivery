@@ -272,11 +272,20 @@ export const restaurantLogin = async (req, res) => {
       });
     }
 
-    // Check if account is locked
+    // Check if account is locked (with auto-unlock check)
     if (restaurant.isLocked()) {
+      const lockTimeLeft = Math.ceil((restaurant.lockUntil - Date.now()) / (60 * 1000)); // minutes
       return res.status(423).json({
         success: false,
-        message: 'Account is temporarily locked due to multiple failed login attempts. Please try again later.'
+        message: `Account is temporarily locked due to multiple failed login attempts. Please try again in ${lockTimeLeft} minute(s).`,
+        lockTimeLeft: lockTimeLeft
+      });
+    }
+    
+    // Auto-unlock if lock period has expired (safety check)
+    if (restaurant.lockUntil && restaurant.lockUntil < Date.now()) {
+      await restaurant.updateOne({
+        $unset: { lockUntil: 1, loginAttempts: 1 }
       });
     }
 

@@ -15,7 +15,7 @@ import {
   Activity
 } from 'lucide-react';
 import { superadminApi } from '../../../services/api/superadminApi';
-import LoadingSpinner from '../../common/LoadingSpinner';
+import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import { formatCurrency, formatPercentage } from '../../../utils/currency';
 
 const RevenueAnalytics = ({ user, onLogout }) => {
@@ -136,7 +136,7 @@ const RevenueAnalytics = ({ user, onLogout }) => {
 
   useEffect(() => {
     fetchAnalyticsData();
-  }, [fetchAnalyticsData]);
+  }, []);
 
   // Currency and percentage formatting is now handled by utility functions
 

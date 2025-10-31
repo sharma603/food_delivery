@@ -15,7 +15,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { superadminApi } from '../../../services/api/superadminApi';
-import LoadingSpinner from '../../common/LoadingSpinner';
+import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import { formatCurrency } from '../../../utils/currency';
 
 const CommissionSystem = ({ user, onLogout }) => {
@@ -99,7 +99,7 @@ const CommissionSystem = ({ user, onLogout }) => {
 
   useEffect(() => {
     fetchCommissionData();
-  }, [fetchCommissionData]);
+  }, []);
 
   // Calculate commission
   const calculateCommission = () => {

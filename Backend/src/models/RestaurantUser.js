@@ -309,6 +309,7 @@ restaurantSchema.methods.isLocked = function() {
 
 // Increment login attempts
 restaurantSchema.methods.incLoginAttempts = function() {
+  // Auto-unlock if lock period has expired
   if (this.lockUntil && this.lockUntil < Date.now()) {
     return this.updateOne({
       $unset: { lockUntil: 1, loginAttempts: 1 }
@@ -317,10 +318,15 @@ restaurantSchema.methods.incLoginAttempts = function() {
 
   const updates = { $inc: { loginAttempts: 1 } };
 
-  // Lock account after 5 failed attempts for 2 hours
-  if (this.loginAttempts + 1 >= 5 && !this.isLocked()) {
+  // Configurable lock settings based on environment
+  const MAX_LOGIN_ATTEMPTS = parseInt(process.env.MAX_LOGIN_ATTEMPTS || '10'); // Default: 10 attempts (was 5)
+  const LOCK_DURATION_MINUTES = parseInt(process.env.LOCK_DURATION_MINUTES || (process.env.NODE_ENV === 'production' ? '120' : '15')); // 15 min dev, 2 hours prod
+  const LOCK_DURATION_MS = LOCK_DURATION_MINUTES * 60 * 1000;
+
+  // Lock account after max attempts
+  if (this.loginAttempts + 1 >= MAX_LOGIN_ATTEMPTS && !this.isLocked()) {
     updates.$set = {
-      lockUntil: Date.now() + 2 * 60 * 60 * 1000 // 2 hours
+      lockUntil: Date.now() + LOCK_DURATION_MS
     };
   }
 
@@ -338,6 +344,13 @@ restaurantSchema.methods.updateLoginInfo = function() {
     this.lockUntil = undefined;
   }
 
+  return this.save();
+};
+
+// Manual unlock method (for admin use or after password reset)
+restaurantSchema.methods.unlockAccount = function() {
+  this.loginAttempts = undefined;
+  this.lockUntil = undefined;
   return this.save();
 };
 

@@ -12,7 +12,7 @@ import {
   assignDeliveryToPersonnel,
   getDelayedDeliveries,
   bulkUpdateDeliveryStatus
-} from '../../controllers/delivery/trackingController.js';
+} from '../../delivery/controllers/trackingController.js';
 
 import { protect, authorize } from '../../middleware/auth.js';
 
@@ -22,7 +22,7 @@ const router = express.Router();
 router.use(protect);
 
 // Apply superadmin authorization to all routes
-router.use(authorize(['super_admin']));
+router.use(authorize('super_admin'));
 
 // GET /api/v1/superadmin/delivery/tracking/active - Get active deliveries
 router.get('/active', getActiveDeliveries);

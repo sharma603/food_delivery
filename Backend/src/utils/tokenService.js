@@ -14,7 +14,8 @@ export const signAccessToken = (payload) => {
 export const generateRefreshToken = async (userId) => {
   const tokenId = uuidv4();
   const jti = `rt:${userId}:${tokenId}`;
-  const refreshToken = jwt.sign({ sub: userId, jti }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
+  const refreshSecret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
+  const refreshToken = jwt.sign({ sub: userId, jti }, refreshSecret, { expiresIn: '7d' });
 
   await redis.set(jti, 'valid', 'EX', REFRESH_TOKEN_TTL);
   return { refreshToken, jti };
@@ -31,7 +32,10 @@ export const rotateRefreshToken = async (oldJti, userId) => {
 export const verifyAccessToken = (token) => jwt.verify(token, process.env.JWT_SECRET);
 
 export const verifyRefreshToken = async (token) => {
-  const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+  const refreshSecret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
+  const decoded = jwt.verify(token, refreshSecret);
+  // If Redis is disabled, skip jti lookup and accept token signature only
+  if (redis && redis.__disabled) return decoded;
   const status = await redis.get(decoded.jti);
   if (status !== 'valid') {
     throw new Error('Invalid refresh token');

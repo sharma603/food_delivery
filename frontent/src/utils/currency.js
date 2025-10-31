@@ -4,12 +4,15 @@ export const formatCurrency = (amount) => {
     return 'Rs. 0';
   }
   
+  // Format with 2 decimal places, round properly
+  const roundedAmount = Math.round((amount + Number.EPSILON) * 100) / 100;
+  
   return new Intl.NumberFormat('en-NP', {
     style: 'currency',
     currency: 'NPR',
     minimumFractionDigits: 0,
     maximumFractionDigits: 2
-  }).format(amount).replace('NPR', 'Rs.');
+  }).format(roundedAmount).replace('NPR', 'Rs.');
 };
 
 // Format currency without symbol (just the number)
@@ -37,8 +40,8 @@ export const formatCurrencyWithRs = (amount) => {
 export const parseCurrency = (currencyString) => {
   if (!currencyString) return 0;
   
-  // Remove Rs., commas, and spaces
-  const cleaned = currencyString.toString().replace(/Rs\.|,|\s/g, '');
+  // Remove Rs., QAR, commas, and spaces
+  const cleaned = currencyString.toString().replace(/Rs\.|QAR|,|\s/g, '');
   return parseFloat(cleaned) || 0;
 };
 

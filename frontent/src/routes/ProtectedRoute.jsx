@@ -23,12 +23,12 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
 
   // Check role if specified
   if (allowedRoles.length > 0) {
-    const userRole = user.role || (user.restaurant ? 'restaurant' : 'superadmin');
+    const userRole = user.role || (user.restaurant ? 'restaurant' : 'super_admin');
     console.log('Role check:', { userRole, allowedRoles, userHasRole: allowedRoles.includes(userRole) });
     
     if (!allowedRoles.includes(userRole)) {
       // Redirect to appropriate login page based on role
-      const redirectTo = allowedRoles.includes('superadmin') ? '/admin/login' : '/restaurant/login';
+      const redirectTo = allowedRoles.includes('super_admin') ? '/admin/login' : '/restaurant/login';
       console.log('Role mismatch, redirecting to:', redirectTo);
       return <Navigate to={redirectTo} replace />;
     }

@@ -57,12 +57,6 @@ const OrderDetails = ({ order, onStatusChange, onClose }) => {
     return new Date(dateString).toLocaleString();
   };
 
-  const calculateItemTotal = (item) => {
-    const baseTotal = item.menuItem.price * item.quantity;
-    const customizationTotal = item.customizations?.reduce((sum, custom) => 
-      sum + (custom.additionalPrice || 0), 0) || 0;
-    return baseTotal + customizationTotal;
-  };
 
   return (
     <div className="order-details">
