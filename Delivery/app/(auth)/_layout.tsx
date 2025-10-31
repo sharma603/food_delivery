@@ -1,0 +1,18 @@
+import React, { useEffect } from 'react';
+import { Stack, useRouter } from 'expo-router';
+import { useAuth } from '../../src/context/AuthContext';
+
+export default function AuthLayout() {
+  const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.replace('/(app)/(tabs)/dashboard');
+    }
+  }, [isAuthenticated, isLoading, router]);
+
+  return <Stack screenOptions={{ headerShown: false }} />;
+}
+
+

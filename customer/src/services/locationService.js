@@ -1,50 +1,8 @@
 import { Alert } from 'react-native';
 
-// Delivery zones with their charges
-const DELIVERY_ZONES = {
-  // Kathmandu Valley areas
-  'kathmandu': { name: 'Kathmandu', charge: 50, radius: 10 },
-  'lalitpur': { name: 'Lalitpur', charge: 60, radius: 12 },
-  'bhaktapur': { name: 'Bhaktapur', charge: 70, radius: 15 },
-  'kirtipur': { name: 'Kirtipur', charge: 55, radius: 11 },
-  
-  // Major areas within Kathmandu
-  'thamel': { name: 'Thamel', charge: 50, radius: 5 },
-  'durbar_marg': { name: 'Durbar Marg', charge: 50, radius: 5 },
-  'new_road': { name: 'New Road', charge: 50, radius: 5 },
-  'ratna_park': { name: 'Ratna Park', charge: 50, radius: 5 },
-  'basantapur': { name: 'Basantapur', charge: 50, radius: 5 },
-  
-  // Outside valley (higher charges)
-  'pokhara': { name: 'Pokhara', charge: 200, radius: 50 },
-  'chitwan': { name: 'Chitwan', charge: 250, radius: 60 },
-  'lumbini': { name: 'Lumbini', charge: 300, radius: 70 },
-  
-  // Default for unknown locations
-  'default': { name: 'Other Location', charge: 100, radius: 20 }
-};
-
-// Restaurant locations (you can add more restaurants here)
-const RESTAURANT_LOCATIONS = {
-  '68dd072a4e195c5a11798a45': { // Himalayan Spice Kitchen
-    latitude: 27.7172,
-    longitude: 85.3240,
-    name: 'Himalayan Spice Kitchen',
-    address: 'Thamel, Kathmandu'
-  },
-  '68dd072a4e195c5a11798a46': { // Everest Cafe
-    latitude: 27.7180,
-    longitude: 85.3250,
-    name: 'Everest Cafe',
-    address: 'Durbar Marg, Kathmandu'
-  },
-  '68dd072a4e195c5a11798a47': { // Momo Palace
-    latitude: 27.7160,
-    longitude: 85.3230,
-    name: 'Momo Palace',
-    address: 'New Road, Kathmandu'
-  }
-};
+// Delivery configuration - should be fetched from backend API
+const DELIVERY_ZONES = {};
+const RESTAURANT_LOCATIONS = {};
 
 class LocationService {
   // Mock implementation - always returns success
@@ -70,16 +28,16 @@ class LocationService {
   // Mock implementation - always returns success with address
   static async getCurrentLocationWithAddress() {
     try {
-      // Return mock location with address data
+      // Return empty address data - user must manually enter location
       return {
-        latitude: 27.7172,
-        longitude: 85.3240,
-        accuracy: 10,
-        address: 'Thamel, Kathmandu, Nepal',
-        street: 'Thamel',
-        city: 'Kathmandu',
-        state: 'Bagmati',
-        zipCode: '44600',
+        latitude: 0,
+        longitude: 0,
+        accuracy: 0,
+        address: '',
+        street: '',
+        city: '',
+        state: '',
+        zipCode: '',
         country: 'Nepal'
       };
     } catch (error) {
@@ -246,16 +204,8 @@ class LocationService {
   // Mock implementation - always returns success
   static async reverseGeocodeAsync(coordinates) {
     try {
-      // Return mock address data
-      return [{
-        name: 'Thamel',
-        street: 'Thamel Street',
-        district: 'Kathmandu',
-        city: 'Kathmandu',
-        region: 'Bagmati',
-        country: 'Nepal',
-        postalCode: '44600'
-      }];
+      // Return empty suggestions - user must manually enter address
+      return [];
     } catch (error) {
       console.error('Error reverse geocoding:', error);
       return [];

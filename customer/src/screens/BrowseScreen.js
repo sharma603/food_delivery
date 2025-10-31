@@ -74,32 +74,16 @@ const BrowseScreen = ({ navigation }) => {
       setError(null);
       setLoading(true);
       
-      console.log('🚀 Fetching restaurants with params:', params);
       const response = await mobileRestaurantAPI.getRestaurants(params);
-      console.log('📦 API Response received:', response);
       
       if (response && response.success) {
-        // Backend already filters by isOpen=true, so no need to filter again
-        // Just set the restaurants directly
-        console.log('✅ Restaurants fetched successfully:', response.data?.length || 0, 'restaurants (backend already filtered)');
-        console.log('🔍 Raw restaurants data:', response.data);
         setRestaurantsData(response.data || []);
       } else {
         throw new Error(response?.message || 'Failed to load restaurants');
       }
     } catch (err) {
-      console.error('Error loading restaurants:', err);
       const errorMessage = err?.message || err?.toString() || 'Failed to load restaurants';
       setError(errorMessage);
-      
-      // For debugging - show detailed error info
-      console.log('API Error Details:', {
-        message: errorMessage,
-        params: params,
-        error: err
-      });
-      
-      // Set empty array to show error state
       setRestaurantsData([]);
     } finally {
       setLoading(false);
@@ -168,20 +152,17 @@ const BrowseScreen = ({ navigation }) => {
           return 0;
       }
     } catch (error) {
-      console.warn('Error sorting restaurants:', error);
       return 0;
     }
   });
 
   const navigateToRestaurant = (restaurant) => {
     try {
-      console.log('Navigating to restaurant:', restaurant?.name || 'Unknown');
       navigation.navigate('RestaurantDetailScreen', { 
         restaurant,
         restaurantId: restaurant._id || restaurant.id
       });
     } catch (error) {
-      console.error('Navigation error:', error);
       // Fallback navigation
       navigation.navigate('RestaurantScreen');
     }
@@ -200,7 +181,6 @@ const BrowseScreen = ({ navigation }) => {
         await loadRestaurants();
       }
     } catch (err) {
-      console.error('Search error:', err);
       setRestaurantsData([]); // Fallback to empty array
     } finally {
       setLoading(false);

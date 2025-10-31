@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
   Dimensions,
@@ -16,19 +15,23 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-// import MapLibreGL from '@maplibre/maplibre-react-native';
+import MapView, { Marker, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { COLORS } from '../utils/constants';
 import { addressAPI } from '../services/api';
+import LoginStyleInput from '../components/LoginStyleInput';
 
 const { width, height } = Dimensions.get('window');
 
-const AddressManagementScreen = ({ navigation }) => {
+const AddressManagementScreen = ({ navigation, route }) => {
+  // Check if this screen is accessed from cart for order flow
+  const fromCart = route?.params?.fromCart || false;
   const [addresses, setAddresses] = useState([]);
   const [filteredAddresses, setFilteredAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const mapRef = useRef(null);
   
   // Map and location state
   const [location, setLocation] = useState(null);
@@ -70,11 +73,7 @@ const AddressManagementScreen = ({ navigation }) => {
       // Request permission
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'Permission Denied',
-          'Location permission is required to show your current location on the map.',
-          [{ text: 'OK' }]
-        );
+        // Don't show alert immediately, just set state
         setLocationPermission(false);
         return;
       }
@@ -86,25 +85,28 @@ const AddressManagementScreen = ({ navigation }) => {
         accuracy: Location.Accuracy.Balanced,
       });
       
-      const { latitude, longitude } = currentLocation.coords;
-      
-      setLocation({
-        latitude,
-        longitude,
-      });
-      
+      // Validate coordinates before setting
+      if (currentLocation?.coords?.latitude && currentLocation?.coords?.longitude) {
+        const { latitude, longitude } = currentLocation.coords;
+        
+        setLocation({
+          latitude,
+          longitude,
+        });
+        
       setMapRegion({
         latitude,
         longitude,
-        latitudeDelta: 0.0922,
-        longitudeDelta: 0.0421,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.0025,
       });
+      }
       
-      console.log('📍 Current location:', { latitude, longitude });
       
     } catch (error) {
       console.error('❌ Error getting location:', error);
-      Alert.alert('Error', 'Unable to get your current location');
+      // Don't show alert in catch block to prevent crashes
+      setLocationPermission(false);
     } finally {
       setLocationLoading(false);
     }
@@ -113,21 +115,11 @@ const AddressManagementScreen = ({ navigation }) => {
   const fetchAddresses = async () => {
     try {
       setLoading(true);
-      console.log('🔄 Fetching addresses...');
       const response = await addressAPI.getAllAddresses();
-      console.log('✅ Addresses response:', response);
       const fetchedAddresses = response.data || [];
       setAddresses(fetchedAddresses);
       setFilteredAddresses(fetchedAddresses);
-      console.log(`📍 Loaded ${fetchedAddresses.length} addresses`);
     } catch (error) {
-      console.error('❌ Error fetching addresses:', error);
-      console.error('❌ Error details:', {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
-        url: error.config?.url
-      });
       
       let errorMessage = 'Failed to fetch addresses';
       if (error.response?.status === 401) {
@@ -184,7 +176,17 @@ const AddressManagementScreen = ({ navigation }) => {
   };
 
   const handleEditAddress = (address) => {
-    navigation.navigate('AddAddress', { address, isEdit: true });
+    try {
+      if (!address || !address._id) {
+        console.error('Invalid address object:', address);
+        Alert.alert('Error', 'Invalid address data');
+        return;
+      }
+      navigation.navigate('AddAddress', { address, isEdit: true });
+    } catch (error) {
+      console.error('Error navigating to edit address:', error);
+      Alert.alert('Error', 'Unable to edit this address');
+    }
   };
 
   const handleDeleteAddress = (addressId) => {
@@ -240,8 +242,20 @@ const AddressManagementScreen = ({ navigation }) => {
     }
   };
 
+  // Handle address selection for order flow
+  const handleSelectAddress = (address) => {
+    if (fromCart) {
+      // Return selected address to cart screen
+      navigation.navigate('CartScreen', { selectedAddress: address });
+    }
+  };
+
   const AddressCard = ({ address }) => (
-    <View style={styles.addressCard}>
+    <TouchableOpacity 
+      style={styles.addressCard}
+      onPress={() => fromCart && handleSelectAddress(address)}
+      activeOpacity={fromCart ? 0.7 : 1}
+    >
       <View style={styles.addressHeader}>
         <View style={styles.addressTypeContainer}>
           <View
@@ -265,39 +279,62 @@ const AddressManagementScreen = ({ navigation }) => {
             )}
           </View>
         </View>
-        <View style={styles.addressActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleEditAddress(address)}
-          >
-            <Ionicons name="create-outline" size={20} color={COLORS.PRIMARY} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleDeleteAddress(address._id)}
-          >
-            <Ionicons name="trash-outline" size={20} color={COLORS.ERROR} />
-          </TouchableOpacity>
-        </View>
+        {!fromCart && (
+          <View style={styles.addressActions}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => {
+                try {
+                  handleEditAddress(address);
+                } catch (error) {
+                  console.error('Error handling edit button:', error);
+                  Alert.alert('Error', 'Unable to edit this address');
+                }
+              }}
+            >
+              <Ionicons name="create-outline" size={20} color={COLORS.PRIMARY} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => {
+                try {
+                  handleDeleteAddress(address._id);
+                } catch (error) {
+                  console.error('Error handling delete button:', error);
+                  Alert.alert('Error', 'Unable to delete this address');
+                }
+              }}
+            >
+              <Ionicons name="trash-outline" size={20} color={COLORS.ERROR} />
+            </TouchableOpacity>
+          </View>
+        )}
+        {fromCart && (
+          <Ionicons name="chevron-forward" size={24} color={COLORS.PRIMARY} />
+        )}
       </View>
 
       <View style={styles.addressDetails}>
-        <View style={styles.addressRow}>
-          <Ionicons name="location-outline" size={16} color={COLORS.TEXT_SECONDARY} />
-          <Text style={styles.addressText}>{address.street}</Text>
-        </View>
+        {address.street && (
+          <View style={styles.addressRow}>
+            <Ionicons name="location-outline" size={16} color={COLORS.TEXT_SECONDARY} />
+            <Text style={styles.addressText}>{address.street}</Text>
+          </View>
+        )}
         {address.apartment && (
           <View style={styles.addressRow}>
             <Ionicons name="business-outline" size={16} color={COLORS.TEXT_SECONDARY} />
             <Text style={styles.addressText}>{address.apartment}</Text>
           </View>
         )}
-        <View style={styles.addressRow}>
-          <Ionicons name="map-outline" size={16} color={COLORS.TEXT_SECONDARY} />
-          <Text style={styles.addressText}>
-            {address.city}, {address.state} {address.zipCode}
-          </Text>
-        </View>
+        {(address.city || address.state || address.zipCode) && (
+          <View style={styles.addressRow}>
+            <Ionicons name="map-outline" size={16} color={COLORS.TEXT_SECONDARY} />
+            <Text style={styles.addressText}>
+              {[address.city, address.state, address.zipCode].filter(Boolean).join(', ')}
+            </Text>
+          </View>
+        )}
         {address.instructions && (
           <View style={styles.instructionsContainer}>
             <Ionicons name="information-circle-outline" size={16} color={COLORS.TEXT_SECONDARY} />
@@ -305,7 +342,7 @@ const AddressManagementScreen = ({ navigation }) => {
           </View>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   if (loading) {
@@ -316,7 +353,7 @@ const AddressManagementScreen = ({ navigation }) => {
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color={COLORS.PRIMARY} />
+            <Ionicons name="chevron-back" size={28} color={COLORS.PRIMARY} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>My Addresses</Text>
           <View style={styles.headerRight} />
@@ -337,58 +374,32 @@ const AddressManagementScreen = ({ navigation }) => {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color={COLORS.PRIMARY} />
+          <Ionicons name="chevron-back" size={28} color={COLORS.PRIMARY} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Addresses</Text>
+        <Text style={styles.headerTitle}>
+          {fromCart ? 'Select Delivery Address' : 'My Addresses'}
+        </Text>
         <View style={styles.headerRight} />
       </View>
+
+      {fromCart && (
+        <View style={styles.selectModeBanner}>
+          <Ionicons name="location" size={20} color={COLORS.PRIMARY} />
+          <Text style={styles.selectModeText}>
+            Tap an address to select it for your order
+          </Text>
+        </View>
+      )}
 
       {/* Search Box */}
       <View style={styles.searchContainer}>
         <Text style={styles.searchLabel}>Search Addresses</Text>
-        <TouchableOpacity 
-          style={[
-            styles.searchInputContainer,
-            searchQuery.length > 0 && styles.searchInputContainerFocused
-          ]}
-          activeOpacity={1}
-          onPress={() => {
-            // Force focus on the TextInput when container is tapped
-            console.log('📱 Search container tapped');
-          }}
-          delayPressIn={0}
-        >
-          <Ionicons 
-            name="search-outline" 
-            size={20} 
-            color={searchQuery.length > 0 ? COLORS.PRIMARY : "#666"} 
-            style={styles.searchIcon} 
-          />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search addresses..."
-            placeholderTextColor="#999"
-            value={searchQuery}
-            onChangeText={handleSearchChange}
-            returnKeyType="search"
-            blurOnSubmit={false}
-            autoCorrect={false}
-            autoCapitalize="none"
-            textContentType="none"
-            editable={true}
-            selectTextOnFocus={false}
-            caretHidden={false}
-            autoFocus={false}
-            keyboardShouldPersistTaps="handled"
-            underlineColorAndroid="transparent"
-            importantForAutofill="no"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => handleSearchChange('')} style={styles.clearButton}>
-              <Ionicons name="close-circle" size={20} color={COLORS.TEXT_LIGHT} />
-            </TouchableOpacity>
-          )}
-        </TouchableOpacity>
+        <LoginStyleInput
+          placeholder="Search addresses..."
+          value={searchQuery}
+          onChangeText={handleSearchChange}
+          icon="search-outline"
+        />
       </View>
 
       <KeyboardAvoidingView 
@@ -400,6 +411,7 @@ const AddressManagementScreen = ({ navigation }) => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="none"
+          contentContainerStyle={{ paddingBottom: 20 }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -419,45 +431,84 @@ const AddressManagementScreen = ({ navigation }) => {
             </View>
           ) : (
             <View style={styles.map}>
-              <View style={styles.locationDisplay}>
-                <Ionicons name="location" size={40} color={COLORS.PRIMARY} />
-                <Text style={styles.locationTitle}>Your Location</Text>
-                
-                {location && (
-                  <View style={styles.locationInfo}>
-                    <Text style={styles.locationText}>
-                      Latitude: {location.latitude.toFixed(6)}
-                    </Text>
-                    <Text style={styles.locationText}>
-                      Longitude: {location.longitude.toFixed(6)}
-                    </Text>
-                  </View>
+              <MapView
+                ref={mapRef}
+                provider={PROVIDER_DEFAULT}
+                style={styles.actualMap}
+                initialRegion={location ? {
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                  latitudeDelta: 0.005,
+                  longitudeDelta: 0.0025,
+                } : mapRegion}
+                showsUserLocation={true}
+                showsMyLocationButton={false}
+              >
+                {/* CartoDB tiles */}
+                <UrlTile
+                  urlTemplate="https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png"
+                  maximumZ={19}
+                  flipY={false}
+                  tileSize={256}
+                />
+
+                {/* Current Location */}
+                {location && location.latitude && location.longitude && (
+                  <Marker
+                    coordinate={{
+                      latitude: Number(location.latitude),
+                      longitude: Number(location.longitude),
+                    }}
+                    title="Your Location"
+                  >
+                    <View style={styles.currentLocationMarker}>
+                      <Ionicons name="person" size={16} color={COLORS.WHITE} />
+                    </View>
+                  </Marker>
                 )}
-                
-                {filteredAddresses.length > 0 && (
-                  <View style={styles.addressesInfo}>
-                    <Text style={styles.addressesTitle}>
-                      Saved Addresses ({filteredAddresses.length})
-                    </Text>
-                    {filteredAddresses.slice(0, 3).map((address, index) => (
-                      <View key={address._id} style={styles.addressPreview}>
+
+                {/* Saved Addresses */}
+                {filteredAddresses.map((address) => (
+                  address.coordinates?.latitude && address.coordinates?.longitude && (
+                    <Marker
+                      key={address._id}
+                      coordinate={{
+                        latitude: Number(address.coordinates.latitude),
+                        longitude: Number(address.coordinates.longitude),
+                      }}
+                      title={String(address.label || address.type || 'Address')}
+                      description={String(address.street || '')}
+                      onPress={() => {
+                        try {
+                          handleEditAddress(address);
+                        } catch (error) {
+                          console.error('Error handling marker press:', error);
+                          Alert.alert('Error', 'Unable to open this address');
+                        }
+                      }}
+                    >
+                      <View style={[styles.addressMarker, { 
+                        backgroundColor: address.type === 'home' ? '#4CAF50' : address.type === 'work' ? '#2196F3' : '#FF9800'
+                      }]}>
                         <Ionicons 
                           name={address.type === 'home' ? 'home' : address.type === 'work' ? 'briefcase' : 'location'} 
                           size={16} 
-                          color={address.type === 'home' ? '#4CAF50' : address.type === 'work' ? '#2196F3' : '#FF9800'} 
+                          color={COLORS.WHITE} 
                         />
-                        <Text style={styles.addressPreviewText}>
-                          {address.label || address.type} - {address.city}
-                        </Text>
                       </View>
-                    ))}
-                    {filteredAddresses.length > 3 && (
-                      <Text style={styles.moreAddresses}>
-                        +{filteredAddresses.length - 3} more addresses
-                      </Text>
-                    )}
-                  </View>
-                )}
+                    </Marker>
+                  )
+                ))}
+              </MapView>
+
+              {/* Map overlay */}
+              <View style={styles.mapOverlay}>
+                <View style={styles.locationBadge}>
+                  <Ionicons name="location" size={16} color={COLORS.PRIMARY} />
+                  <Text style={styles.locationBadgeText}>
+                    {filteredAddresses.length} address{filteredAddresses.length !== 1 ? 'es' : ''}
+                  </Text>
+                </View>
               </View>
             </View>
           )}
@@ -548,40 +599,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.TEXT_PRIMARY,
     marginBottom: 8,
-  },
-  searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#f8f9fa',
-    height: 56,
-    minHeight: 56,
-  },
-  searchInputContainerFocused: {
-    borderColor: COLORS.PRIMARY,
-    backgroundColor: '#fff',
-    shadowColor: COLORS.PRIMARY,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  searchIcon: {
-    marginRight: 12,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#2c3e50',
-    paddingVertical: 0,
-    minHeight: 24,
-  },
-  clearButton: {
-    padding: 4,
-    marginLeft: 8,
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -800,40 +817,82 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  actualMap: {
+    width: '100%',
+    height: '100%',
+  },
   currentLocationMarker: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: COLORS.PRIMARY,
+    backgroundColor: '#2196F3',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#fff',
+    borderColor: COLORS.WHITE,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
     elevation: 5,
   },
   addressMarker: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
+    borderWidth: 3,
+    borderColor: COLORS.WHITE,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
     elevation: 5,
+  },
+  mapOverlay: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    right: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  locationBadge: {
+    backgroundColor: COLORS.WHITE,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+    shadowColor: COLORS.SHADOW,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+    locationBadgeText: {
+    fontSize: 13,
+    color: COLORS.TEXT_PRIMARY,
+    fontWeight: '600',
+  },
+  selectModeBanner: {
+    backgroundColor: COLORS.PRIMARY + '15',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 20,
+    marginVertical: 8,
+    borderRadius: 8,
+  },
+  selectModeText: {
+    fontSize: 14,
+    color: COLORS.PRIMARY,
+    fontWeight: '600',
+    flex: 1,
   },
   locationDisplay: {
     flex: 1,

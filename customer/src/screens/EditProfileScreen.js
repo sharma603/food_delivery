@@ -18,6 +18,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import LoginStyleInput from '../components/LoginStyleInput';
 import { COLORS } from '../utils/constants';
 import NepalAddressSelector from '../components/NepalAddressSelector';
 
@@ -199,40 +200,46 @@ const EditProfileScreen = ({ navigation }) => {
     }
   };
 
-  const ProfileInput = ({ label, value, onChangeText, placeholder, keyboardType = 'default', multiline = false, editable = true, autoCapitalize = 'none' }) => (
-    <View style={styles.inputContainer}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <View style={styles.inputWrapper}>
-        <TextInput
-          style={[styles.input, multiline && styles.multilineInput, !editable && styles.disabledInput]}
+  const ProfileInput = ({ label, value, onChangeText, placeholder, keyboardType = 'default', multiline = false, editable = true, autoCapitalize = 'none', icon, ...props }) => {
+    if (multiline) {
+      // For multiline inputs, use TextInput with custom styles
+      return (
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>{label}</Text>
+          <View style={styles.inputWrapper}>
+            <TextInput
+              style={[styles.input, styles.multilineInput, !editable && styles.disabledInput]}
+              value={value}
+              onChangeText={onChangeText}
+              placeholder={placeholder}
+              placeholderTextColor={COLORS.TEXT_LIGHT}
+              keyboardType={keyboardType}
+              multiline={multiline}
+              numberOfLines={3}
+              editable={editable}
+              autoCapitalize={autoCapitalize}
+              {...props}
+            />
+          </View>
+        </View>
+      );
+    }
+    
+    // For single line inputs, use LoginStyleInput
+    return (
+      <View style={styles.inputContainer}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        <LoginStyleInput
+          placeholder={placeholder}
           value={value}
           onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={COLORS.TEXT_LIGHT}
           keyboardType={keyboardType}
-          multiline={multiline}
-          numberOfLines={multiline ? 3 : 1}
-          editable={editable}
-          returnKeyType="next"
-          autoCorrect={false}
-          autoCapitalize={autoCapitalize}
-          selectTextOnFocus={true}
-          clearButtonMode="never"
-          enablesReturnKeyAutomatically={false}
-          textContentType="none"
-          autoComplete="off"
-          onFocus={() => {
-            // Ensure keyboard stays open
-            console.log('Input focused');
-          }}
-          onBlur={() => {
-            // Only blur if user explicitly wants to
-            console.log('Input blurred');
-          }}
+          icon={icon}
+          {...props}
         />
       </View>
-    </View>
-  );
+    );
+  };
 
   const GenderSelector = ({ label, value, onSelect }) => (
     <View style={styles.inputContainer}>
@@ -301,6 +308,7 @@ const EditProfileScreen = ({ navigation }) => {
               onChangeText={(value) => handleInputChange('name', value)}
               placeholder="Enter your full name"
               autoCapitalize="words"
+              icon="person-outline"
             />
 
             <ProfileInput
@@ -310,6 +318,7 @@ const EditProfileScreen = ({ navigation }) => {
               placeholder="Enter your phone number"
               keyboardType="phone-pad"
               autoCapitalize="none"
+              icon="call-outline"
             />
 
             <DatePickerSelector
@@ -357,6 +366,7 @@ const EditProfileScreen = ({ navigation }) => {
               onChangeText={(value) => handleInputChange('address.city', value)}
               placeholder="Enter city"
               autoCapitalize="words"
+              icon="location-outline"
             />
 
             <ProfileInput
@@ -366,6 +376,7 @@ const EditProfileScreen = ({ navigation }) => {
               placeholder="Enter ZIP code"
               keyboardType="numeric"
               autoCapitalize="none"
+              icon="map-outline"
             />
 
             <ProfileInput

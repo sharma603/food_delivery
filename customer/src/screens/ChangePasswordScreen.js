@@ -36,12 +36,12 @@ const ChangePasswordScreen = ({ navigation }) => {
     }));
   };
 
-  const togglePasswordVisibility = (field) => {
+  const togglePasswordVisibility = React.useCallback((field) => {
     setShowPasswords(prev => ({
       ...prev,
       [field]: !prev[field]
     }));
-  };
+  }, []);
 
   const validateForm = () => {
     if (!formData.currentPassword.trim()) {
@@ -87,38 +87,28 @@ const ChangePasswordScreen = ({ navigation }) => {
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to change password');
+      // Better error handling
+      let errorMessage = 'Failed to change password. Please try again.';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      Alert.alert('Error', errorMessage);
+      
+      // Clear password fields on error
+      setFormData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const PasswordInput = ({ label, value, onChangeText, placeholder, field }) => (
-    <View style={styles.inputContainer}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <View style={styles.passwordContainer}>
-        <TextInput
-          style={styles.passwordInput}
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={COLORS.TEXT_LIGHT}
-          secureTextEntry={!showPasswords[field]}
-          autoCapitalize="none"
-        />
-        <TouchableOpacity
-          style={styles.eyeButton}
-          onPress={() => togglePasswordVisibility(field)}
-        >
-          <Icon
-            name={showPasswords[field] ? "eye-off" : "eye"}
-            size={20}
-            color={COLORS.TEXT_LIGHT}
-          />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -144,29 +134,101 @@ const ChangePasswordScreen = ({ navigation }) => {
               Enter your current password and choose a new secure password.
             </Text>
             
-            <PasswordInput
-              label="Current Password"
-              value={formData.currentPassword}
-              onChangeText={(value) => handleInputChange('currentPassword', value)}
-              placeholder="Enter your current password"
-              field="current"
-            />
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>Current Password</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons 
+                  name="lock-closed-outline"
+                  size={20} 
+                  color="#666" 
+                  style={styles.inputIcon} 
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your current password"
+                  value={formData.currentPassword}
+                  onChangeText={(value) => handleInputChange('currentPassword', value)}
+                  secureTextEntry={!showPasswords.current}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholderTextColor="#999"
+                />
+                <TouchableOpacity
+                  style={styles.eyeIcon}
+                  onPress={() => togglePasswordVisibility('current')}
+                >
+                  <Ionicons
+                    name={showPasswords.current ? 'eye-outline' : 'eye-off-outline'}
+                    size={20}
+                    color="#666"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
 
-            <PasswordInput
-              label="New Password"
-              value={formData.newPassword}
-              onChangeText={(value) => handleInputChange('newPassword', value)}
-              placeholder="Enter your new password"
-              field="new"
-            />
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>New Password</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons 
+                  name="lock-closed-outline"
+                  size={20} 
+                  color="#666" 
+                  style={styles.inputIcon} 
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your new password"
+                  value={formData.newPassword}
+                  onChangeText={(value) => handleInputChange('newPassword', value)}
+                  secureTextEntry={!showPasswords.new}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholderTextColor="#999"
+                />
+                <TouchableOpacity
+                  style={styles.eyeIcon}
+                  onPress={() => togglePasswordVisibility('new')}
+                >
+                  <Ionicons
+                    name={showPasswords.new ? 'eye-outline' : 'eye-off-outline'}
+                    size={20}
+                    color="#666"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
 
-            <PasswordInput
-              label="Confirm New Password"
-              value={formData.confirmPassword}
-              onChangeText={(value) => handleInputChange('confirmPassword', value)}
-              placeholder="Confirm your new password"
-              field="confirm"
-            />
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>Confirm New Password</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons 
+                  name="lock-closed-outline"
+                  size={20} 
+                  color="#666" 
+                  style={styles.inputIcon} 
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Confirm your new password"
+                  value={formData.confirmPassword}
+                  onChangeText={(value) => handleInputChange('confirmPassword', value)}
+                  secureTextEntry={!showPasswords.confirm}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholderTextColor="#999"
+                />
+                <TouchableOpacity
+                  style={styles.eyeIcon}
+                  onPress={() => togglePasswordVisibility('confirm')}
+                >
+                  <Ionicons
+                    name={showPasswords.confirm ? 'eye-outline' : 'eye-off-outline'}
+                    size={20}
+                    color="#666"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
 
             <View style={styles.passwordRequirements}>
               <Text style={styles.requirementsTitle}>Password Requirements:</Text>
@@ -270,7 +332,7 @@ const styles = StyleSheet.create({
     marginBottom: 25,
     lineHeight: 20,
   },
-  inputContainer: {
+  inputWrapper: {
     marginBottom: 20,
   },
   inputLabel: {
@@ -279,23 +341,27 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT_SECONDARY,
     marginBottom: 8,
   },
-  passwordContainer: {
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.BORDER,
-    borderRadius: 8,
+    borderRadius: 12,
+    paddingHorizontal: 16,
     backgroundColor: COLORS.WHITE,
+    height: 56,
   },
-  passwordInput: {
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
     flex: 1,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
     fontSize: 16,
     color: COLORS.TEXT_PRIMARY,
+    paddingVertical: 0,
   },
-  eyeButton: {
-    padding: 12,
+  eyeIcon: {
+    padding: 4,
   },
   passwordRequirements: {
     marginTop: 20,

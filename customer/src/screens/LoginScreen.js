@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,17 +11,22 @@ import {
   Platform,
   ScrollView,
   Modal,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../utils/constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../utils/constants';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loginError, setLoginError] = useState('');
   const { login, loading, error, clearError } = useAuth();
 
   const validateEmail = (email) => {
@@ -29,9 +34,30 @@ const LoginScreen = ({ navigation }) => {
     return emailRegex.test(email);
   };
 
+  // Load saved credentials on mount
+  useEffect(() => {
+    loadSavedCredentials();
+  }, []);
+
+  const loadSavedCredentials = async () => {
+    try {
+      const savedEmail = await AsyncStorage.getItem('saved_login_email');
+      const savedPassword = await AsyncStorage.getItem('saved_login_password');
+      
+      if (savedEmail && savedPassword) {
+        setEmail(savedEmail);
+        setPassword(savedPassword);
+        setRememberMe(true);
+      }
+    } catch (error) {
+      console.log('Error loading saved credentials:', error);
+    }
+  };
+
   const handleLogin = async () => {
     // Clear any previous errors
     clearError();
+    setLoginError('');
 
     // Validation
     if (!email.trim()) {
@@ -62,6 +88,15 @@ const LoginScreen = ({ navigation }) => {
       });
 
       if (response.success) {
+        // Save or clear credentials based on rememberMe
+        if (rememberMe) {
+          await AsyncStorage.setItem('saved_login_email', email);
+          await AsyncStorage.setItem('saved_login_password', password);
+        } else {
+          await AsyncStorage.removeItem('saved_login_email');
+          await AsyncStorage.removeItem('saved_login_password');
+        }
+
         Alert.alert('Success', 'Login successful!', [
           {
             text: 'OK',
@@ -71,10 +106,44 @@ const LoginScreen = ({ navigation }) => {
           },
         ]);
       } else {
-        Alert.alert('Login Failed', response.message || 'Please check your credentials and try again');
+        // Show detailed error message
+        const errorMessage = response.message || 'Login failed. Please check your credentials and try again.';
+        setLoginError(errorMessage);
+        Alert.alert(
+          'Login Failed',
+          errorMessage,
+          [{ text: 'OK', style: 'default' }],
+          { cancelable: true }
+        );
       }
     } catch (error) {
-      Alert.alert('Login Failed', error.message || 'Network error. Please try again.');
+      // Get the actual error message from the error object
+      // The axios interceptor should have set error.message to the backend's message
+      let errorMessage = error.message || 'Login failed. Please check your credentials and try again.';
+      
+      // If we have originalError, prefer its message if available
+      if (error.originalError && error.originalError.message) {
+        errorMessage = error.originalError.message;
+      }
+      
+      // Set error message to display on screen
+      setLoginError(errorMessage);
+      
+      Alert.alert(
+        'Login Failed',
+        errorMessage,
+        [
+          { 
+            text: 'OK', 
+            style: 'default',
+            onPress: () => {
+              // Clear password field on error
+              setPassword('');
+            }
+          }
+        ],
+        { cancelable: true }
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -98,13 +167,24 @@ const LoginScreen = ({ navigation }) => {
 
           <View style={styles.form}>
             {/* Email Input */}
-            <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+            <View style={[
+              styles.inputContainer, 
+              (error || loginError) && styles.inputContainerError
+            ]}>
+              <Ionicons 
+                name="mail-outline" 
+                size={20} 
+                color={(error || loginError) ? COLORS.ERROR : "#666"} 
+                style={styles.inputIcon} 
+              />
               <TextInput
                 style={styles.input}
                 placeholder="Email Address"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (loginError) setLoginError(''); // Clear error when user types
+                }}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -113,13 +193,24 @@ const LoginScreen = ({ navigation }) => {
             </View>
 
             {/* Password Input */}
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+            <View style={[
+              styles.inputContainer, 
+              (error || loginError) && styles.inputContainerError
+            ]}>
+              <Ionicons 
+                name="lock-closed-outline" 
+                size={20} 
+                color={(error || loginError) ? COLORS.ERROR : "#666"} 
+                style={styles.inputIcon} 
+              />
               <TextInput
                 style={styles.input}
                 placeholder="Password"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (loginError) setLoginError(''); // Clear error when user types
+                }}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -137,9 +228,32 @@ const LoginScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
+            {/* Remember Me and Forgot Password */}
+            <View style={styles.optionsContainer}>
+              <View style={styles.rememberMeContainer}>
+                <Switch
+                  value={rememberMe}
+                  onValueChange={setRememberMe}
+                  trackColor={{ false: '#e0e0e0', true: COLORS.PRIMARY }}
+                  thumbColor={rememberMe ? '#ffffff' : '#f4f3f4'}
+                  ios_backgroundColor="#e0e0e0"
+                />
+                <Text style={styles.rememberMeText}>Remember Me</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.forgotPasswordContainer}
+                onPress={() => navigation.navigate('ForgotPassword')}
+              >
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Error Message */}
-            {error && (
-              <Text style={styles.errorText}>{String(error || 'An error occurred')}</Text>
+            {(error || loginError) && (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle" size={20} color={COLORS.ERROR} style={styles.errorIcon} />
+                <Text style={styles.errorText}>{loginError || String(error || 'An error occurred')}</Text>
+              </View>
             )}
 
             {/* Login Button */}
@@ -210,6 +324,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.WHITE,
     height: 56,
   },
+  inputContainerError: {
+    borderColor: COLORS.ERROR,
+    borderWidth: 2,
+  },
   inputIcon: {
     marginRight: 12,
   },
@@ -222,11 +340,48 @@ const styles = StyleSheet.create({
   eyeIcon: {
     padding: 4,
   },
+  optionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rememberMeText: {
+    fontSize: 14,
+    color: COLORS.TEXT_SECONDARY,
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  forgotPasswordContainer: {
+    alignItems: 'flex-end',
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    color: COLORS.PRIMARY,
+    fontWeight: '500',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.ERROR,
+  },
+  errorIcon: {
+    marginRight: 8,
+  },
   errorText: {
     color: COLORS.ERROR,
     fontSize: 14,
-    marginBottom: 16,
-    textAlign: 'center',
+    flex: 1,
+    fontWeight: '500',
   },
   loginButton: {
     backgroundColor: COLORS.PRIMARY,

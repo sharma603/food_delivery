@@ -184,7 +184,7 @@ const RegisterScreen = ({ navigation }) => {
                 style={styles.eyeIcon}
                 onPress={() => setShowPassword(!showPassword)}
               >
-                <Icon
+                <Ionicons
                   name={showPassword ? 'eye-outline' : 'eye-off-outline'}
                   size={20}
                   color="#666"
@@ -209,7 +209,7 @@ const RegisterScreen = ({ navigation }) => {
                 style={styles.eyeIcon}
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
               >
-                <Icon
+                <Ionicons
                   name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'}
                   size={20}
                   color="#666"
@@ -284,11 +284,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: COLORS.BORDER,
     borderRadius: 12,
     marginBottom: 16,
     paddingHorizontal: 16,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: COLORS.WHITE,
     height: 56,
   },
   inputIcon: {
@@ -297,35 +297,35 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: '#2c3e50',
+    color: COLORS.TEXT_PRIMARY,
     paddingVertical: 0,
   },
   eyeIcon: {
     padding: 4,
   },
   errorText: {
-    color: '#e74c3c',
+    color: COLORS.ERROR,
     fontSize: 14,
     marginBottom: 16,
     textAlign: 'center',
   },
   registerButton: {
-    backgroundColor: '#27ae60',
+    backgroundColor: COLORS.PRIMARY,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
     marginBottom: 20,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: COLORS.SHADOW,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
   disabledButton: {
-    backgroundColor: '#bdc3c7',
+    backgroundColor: COLORS.TEXT_LIGHT,
   },
   registerButtonText: {
-    color: '#fff',
+    color: COLORS.WHITE,
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -336,11 +336,11 @@ const styles = StyleSheet.create({
   },
   loginText: {
     fontSize: 16,
-    color: '#7f8c8d',
+    color: COLORS.TEXT_SECONDARY,
   },
   loginLink: {
     fontSize: 16,
-    color: '#27ae60',
+    color: COLORS.PRIMARY,
     fontWeight: 'bold',
   },
 });

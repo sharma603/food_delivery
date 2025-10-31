@@ -197,15 +197,15 @@ const RestaurantMenuScreen = ({ navigation, route }) => {
         </Text>
         
         {/* Price */}
-        <Text style={styles.menuItemPrice}>Rs {item.price}</Text>
+        <Text style={styles.menuItemPrice}>Rs {String(item.price || 0)}</Text>
         
         {/* Category */}
         {item.category && (
           <View style={styles.categoryContainer}>
             <Text style={styles.categoryText}>
               {typeof item.category === 'object' 
-                ? (item.category?.name || item.category?.displayName || 'Category')
-                : item.category
+                ? String(item.category?.name || item.category?.displayName || 'Category')
+                : String(item.category)
               }
             </Text>
           </View>

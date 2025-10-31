@@ -1,13 +1,8 @@
-// Server Configuration - Use environment variable or fallback
-export const SERVER_IP = process.env.EXPO_PUBLIC_SERVER_IP || '192.168.18.38';
-export const SERVER_PORT = process.env.EXPO_PUBLIC_SERVER_PORT || '5000';
+// Import centralized server configuration
+import { SERVER_CONFIG, SERVER_IP, SERVER_PORT, API_CONFIG, MAP_API_KEYS } from '../config/serverConfig';
 
-// API Configuration
-export const API_CONFIG = {
-  BASE_URL: `http://${SERVER_IP}:${SERVER_PORT}/api/v1`,
-  TIMEOUT: 10000,
-  VERSION: 'v1'
-};
+// Re-export for backward compatibility
+export { SERVER_CONFIG, SERVER_IP, SERVER_PORT, API_CONFIG, MAP_API_KEYS };
 
 // API Endpoints
 export const API_ENDPOINTS = {

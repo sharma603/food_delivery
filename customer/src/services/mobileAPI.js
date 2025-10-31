@@ -1,29 +1,32 @@
 import axios from 'axios';
+import { SERVER_CONFIG } from '../config/serverConfig';
 import { API_CONFIG, STORAGE_KEYS, AUTH_ENDPOINTS } from '../utils/constants';
 
 // Network connectivity test function
 const testNetworkConnectivity = async () => {
   try {
-    console.log('Testing network connectivity...');
-    // Extract the base server URL (without /api/v1)
-    const baseServerUrl = API_CONFIG.BASE_URL.replace('/api/v1', '');
-    const healthUrl = `${baseServerUrl}/health`;
-    console.log('Testing health endpoint:', healthUrl);
+    // Use centralized server configuration
+    const healthUrl = `${SERVER_CONFIG.BASE_URL}/health`;
     
     const response = await axios.get(healthUrl, {
       timeout: 5000
     });
-    console.log('Network test successful:', response.status);
     return true;
   } catch (error) {
-    console.error('Network test failed:', error.message);
-    return false;
+    // Try alternative endpoints
+    try {
+      const altUrl = `${SERVER_CONFIG.API_BASE_URL}/mobile/restaurants`;
+      await axios.get(altUrl, { timeout: 3000 });
+      return true;
+    } catch (altError) {
+      return false;
+    }
   }
 };
 
 // Create axios instance for mobile APIs
 const mobileAxios = axios.create({
-  baseURL: `${API_CONFIG.BASE_URL}/mobile`,
+  baseURL: SERVER_CONFIG.MOBILE_API_BASE_URL,
   timeout: API_CONFIG.TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
@@ -34,20 +37,17 @@ const mobileAxios = axios.create({
 mobileAxios.interceptors.request.use(
   async (config) => {
     try {
-      console.log('Making API request to:', config.url);
-      console.log('Full URL:', `${config.baseURL}${config.url}`);
       const AsyncStorage = await import('@react-native-async-storage/async-storage');
       const token = await AsyncStorage.default.getItem(STORAGE_KEYS.AUTH_TOKEN);
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
-      console.log('Error getting auth token:', error);
+      // Silently handle error
     }
     return config;
   },
   (error) => {
-    console.log('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
@@ -55,25 +55,18 @@ mobileAxios.interceptors.request.use(
 // Response interceptor for better error handling
 mobileAxios.interceptors.response.use(
   (response) => {
-    console.log('API Response received:', response.status, response.config.url);
     return response;
   },
   (error) => {
-    // Only log errors in development
-    if (__DEV__) {
-      console.log('API Error:', error.message);
-      console.log('Error details:', {
-        url: error.config?.url,
-        method: error.config?.method,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data
-      });
+    // For login/registration errors, preserve the exact backend error
+    // Don't modify the error - let it be handled by the calling code
+    if (error.response?.data?.message) {
+      // Re-throw with the backend's specific message
+      return Promise.reject(new Error(error.response.data.message));
     }
     
-    // Handle specific error cases
-    if (error.response?.status === 401) {
-      // Token expired or invalid
+    // For other errors, provide default messages
+    if (error.response?.status === 401 && !error.config?.url?.includes('/auth/')) {
       return Promise.reject(new Error('Authentication failed. Please login again.'));
     } else if (error.response?.status === 403) {
       return Promise.reject(new Error('Access denied. You do not have permission to perform this action.'));
@@ -123,9 +116,8 @@ const mobileRestaurantService = {
       const response = await mobileAxios.get(`/restaurants/?${queryParams.toString()}`);
       return response.data;
     } catch (error) {
-      console.error('Error in getRestaurants:', error);
-      if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
-        throw { message: 'Network error. Please check your internet connection.' };
+      if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error') || !error.response) {
+        throw { message: 'Network error. Please check your internet connection and server status.' };
       }
       throw error.response?.data || { message: 'Failed to fetch restaurants' };
     }
@@ -222,7 +214,6 @@ const mobileMenuService = {
       const response = await mobileAxios.get(`/menu-items/?${queryParams.toString()}`);
       return response.data;
     } catch (error) {
-      console.error('Error in getMenuItems:', error);
       if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
         throw { message: 'Network error. Please check your internet connection.' };
       }
@@ -352,15 +343,64 @@ const mobileCategoryService = {
 
 // Mobile Authentication API functions
 const mobileAuthService = {
+  // Forgot password
+  async forgotPassword(emailData) {
+    try {
+      const response = await mobileAxios.post('/auth/forgot-password', emailData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to send reset email' };
+    }
+  },
+
+  // Verify OTP
+  async verifyOTP(email, otp) {
+    try {
+      const response = await mobileAxios.post('/auth/verify-otp', {
+        email: email,
+        otp: otp
+      });
+      return response.data;
+    } catch (error) {
+      const errorData = error.response?.data || { message: 'Failed to verify OTP' };
+      const errorObj = new Error(errorData.message);
+      errorObj.response = error.response;
+      throw errorObj;
+    }
+  },
+
+  // Reset password with OTP
+  async resetPassword(email, otp, newPassword) {
+    try {
+      const response = await mobileAxios.post('/auth/reset-password', {
+        email: email,
+        otp: otp,
+        newPassword: newPassword
+      });
+      return response.data;
+    } catch (error) {
+      const errorData = error.response?.data || { message: 'Failed to reset password' };
+      const errorObj = new Error(errorData.message);
+      errorObj.response = error.response;
+      throw errorObj;
+    }
+  },
+
   // Register customer
   async register(userData) {
     try {
-      console.log('Attempting registration with data:', { email: userData.email, name: userData.name });
+      // Test network connectivity first
+      const isConnected = await testNetworkConnectivity();
+      if (!isConnected) {
+        throw { message: 'Network error. Please check your internet connection and server status.' };
+      }
+      
       const response = await mobileAxios.post('/auth/register', userData);
-      console.log('Registration response:', response.data);
       return response.data;
     } catch (error) {
-      console.error('Registration error:', error.response?.data || error.message);
+      if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error') || !error.response) {
+        throw { message: 'Network error. Please check your internet connection and server status.' };
+      }
       throw error.response?.data || { message: 'Registration failed' };
     }
   },
@@ -368,32 +408,20 @@ const mobileAuthService = {
   // Login customer
   async login(credentials) {
     try {
-      console.log('🔐 Attempting login with credentials:', { 
-        email: credentials.email,
-        hasPassword: !!credentials.password,
-        passwordLength: credentials.password?.length 
-      });
-      console.log('🌐 Making request to:', '/auth/login');
-      
       const response = await mobileAxios.post('/auth/login', credentials);
-      
-      console.log('✅ Login response received:', {
-        success: response.data?.success,
-        hasData: !!response.data?.data,
-        hasCustomer: !!response.data?.data?.customer,
-        hasToken: !!response.data?.data?.token,
-        message: response.data?.message
-      });
-      
       return response.data;
     } catch (error) {
-      console.error('❌ Login error details:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message
-      });
-      throw error.response?.data || { message: 'Login failed' };
+      // Preserve the detailed error message from backend
+      const errorData = error.response?.data || error.response?.data?.message || { message: 'Login failed' };
+      
+      // Create error with detailed message
+      if (typeof errorData === 'string') {
+        throw new Error(errorData);
+      } else if (errorData.message) {
+        throw new Error(errorData.message);
+      } else {
+        throw error;
+      }
     }
   },
 
@@ -403,6 +431,10 @@ const mobileAuthService = {
       const response = await mobileAxios.get('/auth/profile');
       return response.data;
     } catch (error) {
+      // If it's already a processed error (has message), throw it as-is
+      if (error.message && error.message !== 'Failed to get profile') {
+        throw error;
+      }
       throw error.response?.data || { message: 'Failed to get profile' };
     }
   },
@@ -423,7 +455,10 @@ const mobileAuthService = {
       const response = await mobileAxios.put('/auth/change-password', passwordData);
       return response.data;
     } catch (error) {
-      throw error.response?.data || { message: 'Failed to change password' };
+      const errorData = error.response?.data || { message: 'Failed to change password' };
+      const errorObj = new Error(errorData.message);
+      errorObj.response = error.response;
+      throw errorObj;
     }
   },
 
@@ -517,7 +552,6 @@ const mobileOfferService = {
       const response = await mobileAxios.get('/offers', { params });
       return response.data;
     } catch (error) {
-      console.error('Error fetching offers:', error);
       throw error;
     }
   },
@@ -527,7 +561,6 @@ const mobileOfferService = {
       const response = await mobileAxios.get(`/offers/${offerId}`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching offer:', error);
       throw error;
     }
   },
@@ -537,7 +570,6 @@ const mobileOfferService = {
       const response = await mobileAxios.get('/offers/coupons/list', { params });
       return response.data;
     } catch (error) {
-      console.error('Error fetching coupons:', error);
       throw error;
     }
   },
@@ -547,7 +579,6 @@ const mobileOfferService = {
       const response = await mobileAxios.post('/offers/coupons/validate', couponData);
       return response.data;
     } catch (error) {
-      console.error('Error validating coupon:', error);
       throw error;
     }
   },
@@ -557,7 +588,6 @@ const mobileOfferService = {
       const response = await mobileAxios.get(`/offers/restaurants/${restaurantId}`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching restaurant offers:', error);
       throw error;
     }
   }

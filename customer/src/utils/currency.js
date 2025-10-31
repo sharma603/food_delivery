@@ -40,19 +40,6 @@ export const formatPriceForNepal = (amount, isUSD = false) => {
   return formatCurrency(amount);
 };
 
-// Sample Nepalese food prices (converted from USD)
-export const SAMPLE_PRICES = {
-  PAKODA: 50,              // Rs 50
-  MOMO_PER_PIECE: 15,      // Rs 15 per piece
-  MOMO_PER_PLATE: 120,     // Rs 120 per plate
-  CHOWMEIN: 150,           // Rs 150
-  BHIRAJI: 200,            // Rs 200
-  THALI: 250,              // Rs 250
-  CHICKEN_CURRY: 300,      // Rs 300
-  MASALA_TEA: 25,          // Rs 25
-  LASSI: 60,               // Rs 60
-};
-
 // Delivery fee in NPR
 export const DELIVERY_FEE = {
   STANDARD: 50,        // Rs 50 standard delivery

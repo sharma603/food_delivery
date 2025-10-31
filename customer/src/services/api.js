@@ -101,7 +101,7 @@ export const addressAPI = {
   // Get all addresses
   async getAllAddresses() {
     try {
-      const response = await api.get('/customer/auth/addresses');
+      const response = await api.get('/addresses');
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Failed to fetch addresses' };
@@ -111,7 +111,7 @@ export const addressAPI = {
   // Get single address
   async getAddress(addressId) {
     try {
-      const response = await api.get(`/customer/auth/addresses/${addressId}`);
+      const response = await api.get(`/addresses/${addressId}`);
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Failed to fetch address' };
@@ -121,7 +121,7 @@ export const addressAPI = {
   // Add new address
   async addAddress(addressData) {
     try {
-      const response = await api.post('/customer/auth/addresses', addressData);
+      const response = await api.post('/addresses', addressData);
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Failed to add address' };
@@ -131,7 +131,7 @@ export const addressAPI = {
   // Update address
   async updateAddress(addressId, addressData) {
     try {
-      const response = await api.put(`/customer/auth/addresses/${addressId}`, addressData);
+      const response = await api.put(`/addresses/${addressId}`, addressData);
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Failed to update address' };
@@ -141,7 +141,7 @@ export const addressAPI = {
   // Delete address
   async deleteAddress(addressId) {
     try {
-      const response = await api.delete(`/customer/auth/addresses/${addressId}`);
+      const response = await api.delete(`/addresses/${addressId}`);
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Failed to delete address' };

@@ -14,6 +14,7 @@ const AUTH_ACTIONS = {
   REGISTER_FAILURE: 'REGISTER_FAILURE',
   LOGOUT: 'LOGOUT',
   LOADING: 'LOADING',
+  LOADED: 'LOADED',
   CLEAR_ERROR: 'CLEAR_ERROR',
   LOAD_USER: 'LOAD_USER',
 };
@@ -25,6 +26,13 @@ const authReducer = (state, action) => {
       return {
         ...state,
         loading: true,
+        error: null,
+      };
+    
+    case AUTH_ACTIONS.LOADED:
+      return {
+        ...state,
+        loading: false,
         error: null,
       };
     
@@ -91,6 +99,7 @@ const authReducer = (state, action) => {
         isAuthenticated: true,
         user: action.payload.user,
         token: action.payload.token,
+        error: null,
       };
     
     default:
@@ -100,7 +109,7 @@ const authReducer = (state, action) => {
 
 // Initial state
 const initialState = {
-  loading: false,
+  loading: true,  // Start with loading = true to check stored auth
   isAuthenticated: false,
   user: null,
   token: null,
@@ -123,36 +132,54 @@ export const AuthProvider = ({ children }) => {
       const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
       
       if (token && userData) {
-        const parsedUserData = JSON.parse(userData);
-        // Extract user object, ensuring we get a plain object with user properties
-        let userObj = parsedUserData.user || parsedUserData;
-        
-        // If userObj has nested user property, extract it
-        if (userObj && typeof userObj === 'object' && userObj.user) {
-          userObj = userObj.user;
-        }
-        
-        // Ensure we have user data with proper properties
-        if (userObj && typeof userObj === 'object') {
-          dispatch({
-            type: AUTH_ACTIONS.LOAD_USER,
-            payload: { 
-              token, 
-              user: {
-                _id: userObj._id,
-                name: userObj.name || userObj.displayName || 'Customer',
-                email: userObj.email,
-                phone: userObj.phone,
-                ...userObj
-              }
+        try {
+          // Validate token by trying to get the user profile
+          const response = await mobileAuthAPI.getProfile();
+          
+          if (response.success && response.data) {
+            const parsedUserData = JSON.parse(userData);
+            // Extract user object, ensuring we get a plain object with user properties
+            let userObj = response.data || parsedUserData.user || parsedUserData;
+            
+            // If userObj has nested user property, extract it
+            if (userObj && typeof userObj === 'object' && userObj.user) {
+              userObj = userObj.user;
             }
-          });
+            
+            // Ensure we have user data with proper properties
+            if (userObj && typeof userObj === 'object') {
+              dispatch({
+                type: AUTH_ACTIONS.LOAD_USER,
+                payload: { 
+                  token, 
+                  user: {
+                    _id: userObj._id,
+                    name: userObj.name || userObj.displayName || 'Customer',
+                    email: userObj.email,
+                    phone: userObj.phone,
+                    ...userObj
+                  }
+                }
+              });
+              return; // Exit early if user is loaded
+            }
+          }
+        } catch (error) {
+          // Silently handle token validation errors - don't log them
+          // Token is invalid or expired, clear it
+          await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+          await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
         }
       }
+      
+      // If no auth data found or token is invalid, set loading to false
+      dispatch({ type: AUTH_ACTIONS.LOADED });
     } catch (error) {
-      console.error('Error loading stored auth:', error);
+      // Silently handle errors - don't log them to avoid confusion
       await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
       await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
+      // Set loading to false even if there's an error
+      dispatch({ type: AUTH_ACTIONS.LOADED });
     }
   };
 
@@ -201,11 +228,16 @@ export const AuthProvider = ({ children }) => {
         return response;
       }
     } catch (error) {
+      const errorMessage = error.message || 'Network error';
       dispatch({
         type: AUTH_ACTIONS.LOGIN_FAILURE,
-        payload: error.message || 'Network error',
+        payload: errorMessage,
       });
-      throw error;
+      
+      // Re-throw with the original error message preserved
+      const errorToThrow = new Error(errorMessage);
+      errorToThrow.originalError = error;
+      throw errorToThrow;
     }
   };
 
@@ -266,12 +298,17 @@ export const AuthProvider = ({ children }) => {
   // Logout function
   const logout = async () => {
     try {
+      // Clear authentication data
       await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
       await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
       
+      // Clear saved login credentials if they exist
+      await AsyncStorage.removeItem('saved_login_email');
+      await AsyncStorage.removeItem('saved_login_password');
+      
       dispatch({ type: AUTH_ACTIONS.LOGOUT });
     } catch (error) {
-      console.error('Logout error:', error);
+      // Error handled silently
     }
   };
 
@@ -309,7 +346,6 @@ export const AuthProvider = ({ children }) => {
         return response;
       }
     } catch (error) {
-      console.error('Profile update error:', error);
       throw error;
     }
   };
@@ -320,7 +356,6 @@ export const AuthProvider = ({ children }) => {
       const response = await mobileAuthAPI.changePassword(passwordData);
       return response;
     } catch (error) {
-      console.error('Change password error:', error);
       throw error;
     }
   };

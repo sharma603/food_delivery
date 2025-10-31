@@ -125,15 +125,15 @@ const MenuCard = ({ item, onPress }) => {
 
       <View style={styles.content}>
         <Text style={styles.itemName} numberOfLines={1}>
-          {item.name}
+          {String(item.name || '')}
         </Text>
         
         <Text style={styles.restaurantName} numberOfLines={1}>
-          {item.restaurant?.name || 'Restaurant'}
+          {String(item.restaurant?.name || 'Restaurant')}
         </Text>
 
         <Text style={styles.description} numberOfLines={2}>
-          {item.description || 'Delicious food item'}
+          {String(item.description || 'Delicious food item')}
         </Text>
 
         <View style={styles.footer}>
@@ -143,7 +143,7 @@ const MenuCard = ({ item, onPress }) => {
               <View style={styles.ratingContainer}>
                 {getRatingStars(item.restaurant.rating?.average || 0)}
                 <Text style={styles.ratingText}>
-                  ({item.restaurant.rating?.count || 0})
+                  ({String(item.restaurant.rating?.count || 0)})
                 </Text>
               </View>
             )}

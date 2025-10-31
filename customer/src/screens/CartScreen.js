@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   FlatList,
   TouchableOpacity,
@@ -20,7 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import LocationService from '../services/locationService';
 import OrderService, { formatOrderData } from '../services/orderService';
 
-const CartScreen = ({ navigation }) => {
+const CartScreen = ({ navigation, route }) => {
   const { 
     restaurants: cartRestaurants,
     totalItems,
@@ -40,10 +41,32 @@ const CartScreen = ({ navigation }) => {
   const { user, isAuthenticated } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash_on_delivery');
   const [locationData, setLocationData] = useState(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [calculatedDeliveryCharges, setCalculatedDeliveryCharges] = useState({});
+  const [manualLocation, setManualLocation] = useState({ street: '', city: '', state: '', zipCode: '' });
+
+  // Check if address was selected from AddressManagement
+  useEffect(() => {
+    if (route?.params?.selectedAddress) {
+      const address = route.params.selectedAddress;
+      // Set location data from selected address
+      setLocationData({
+        latitude: address.coordinates?.latitude || 0,
+        longitude: address.coordinates?.longitude || 0,
+        address: address.street,
+        city: address.city,
+        state: address.state,
+        zipCode: address.zipCode,
+        country: address.country || 'Nepal'
+      });
+      // Close modal and proceed to payment
+      setShowLocationModal(false);
+      setShowPaymentModal(true);
+    }
+  }, [route?.params?.selectedAddress]);
 
   // Get image source for menu items
   const getImageSource = (item) => {
@@ -90,7 +113,11 @@ const CartScreen = ({ navigation }) => {
       return;
     }
 
-    // Calculate location-based delivery charges in background
+    // Show location selection modal first
+    setShowLocationModal(true);
+  };
+
+  const handleGetGPSLocation = async () => {
     setIsLoadingLocation(true);
     try {
       const locationWithAddress = await LocationService.getCurrentLocationWithAddress();
@@ -98,14 +125,22 @@ const CartScreen = ({ navigation }) => {
       if (!locationWithAddress) {
         Alert.alert(
           'Location Error',
-          'Unable to get your location. Please check your location settings and try again.',
+          'Unable to get your GPS location. You can enter it manually below.',
           [{ text: 'OK' }]
         );
         setIsLoadingLocation(false);
         return;
       }
 
-      // Calculate delivery charges for each restaurant
+      // Auto-fill manual location with GPS data
+      setManualLocation({
+        street: locationWithAddress.address || '',
+        city: locationWithAddress.city || '',
+        state: locationWithAddress.state || '',
+        zipCode: locationWithAddress.zipCode || ''
+      });
+
+      // Calculate delivery charges
       const charges = {};
       let totalCalculatedDeliveryFee = 0;
 
@@ -121,19 +156,43 @@ const CartScreen = ({ navigation }) => {
         totalCalculatedDeliveryFee: totalCalculatedDeliveryFee
       });
       setCalculatedDeliveryCharges(charges);
-      
-      // Directly show payment modal
-      setShowPaymentModal(true);
+
+      Alert.alert('Success', 'GPS location captured! Please review and confirm.');
     } catch (error) {
-      console.error('Error calculating delivery charges:', error);
-      Alert.alert(
-        'Error',
-        'Failed to calculate delivery charges. Please try again.',
-        [{ text: 'OK' }]
-      );
+      console.error('Error getting GPS location:', error);
+      Alert.alert('Error', 'Failed to get GPS location. Please enter manually.');
     } finally {
       setIsLoadingLocation(false);
     }
+  };
+
+  const handleConfirmLocation = async () => {
+    if (!manualLocation.street || !manualLocation.city) {
+      Alert.alert('Error', 'Please enter at least street and city');
+      return;
+    }
+
+    // If GPS location exists, use it, otherwise use manual entry
+    const finalLocation = locationData ? {
+      ...locationData,
+      address: manualLocation.street,
+      city: manualLocation.city,
+      state: manualLocation.state,
+      zipCode: manualLocation.zipCode
+    } : {
+      latitude: 0,
+      longitude: 0,
+      address: manualLocation.street,
+      city: manualLocation.city,
+      state: manualLocation.state,
+      zipCode: manualLocation.zipCode,
+      charges: {},
+      totalCalculatedDeliveryFee: 0
+    };
+
+    setLocationData(finalLocation);
+    setShowLocationModal(false);
+    setShowPaymentModal(true);
   };
 
   const confirmOrderWithPayment = async () => {
@@ -229,12 +288,6 @@ const CartScreen = ({ navigation }) => {
         ]
       );
     } catch (error) {
-      console.error('Error placing order:', error);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
       
       let errorMessage = 'Failed to place order. Please try again.';
       let errorTitle = 'Order Failed';
@@ -305,7 +358,7 @@ const CartScreen = ({ navigation }) => {
         <Text style={styles.itemDescription} numberOfLines={2}>
           {item.description || 'Delicious food item'}
         </Text>
-        <Text style={styles.itemPrice}>Rs {item.price}</Text>
+        <Text style={styles.itemPrice}>Rs {String(item.price || 0)}</Text>
         
         {item.isVegetarian !== undefined && (
           <View style={styles.vegBadge}>
@@ -624,6 +677,54 @@ const CartScreen = ({ navigation }) => {
                 </View>
               </>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Location Selection Modal */}
+      <Modal visible={showLocationModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Delivery Location</Text>
+            <Text style={styles.modalSubtitle}>Choose from your saved addresses or add a new one</Text>
+
+            {/* Direct to Address Management Button */}
+            <TouchableOpacity
+              style={styles.selectAddressButton}
+              onPress={() => {
+                setShowLocationModal(false);
+                // Navigate to Profile stack first, then to AddressManagement with fromCart flag
+                navigation.navigate('Profile', {
+                  screen: 'AddressManagement',
+                  params: { fromCart: true }
+                });
+              }}
+            >
+              <Ionicons name="location" size={28} color={COLORS.PRIMARY} />
+              <View style={{ marginLeft: 12, flex: 1 }}>
+                <Text style={styles.selectAddressButtonText}>Choose Address</Text>
+                <Text style={styles.selectAddressSubtext}>View all addresses or add a new one</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color={COLORS.TEXT_SECONDARY} />
+            </TouchableOpacity>
+
+            {/* Info Message */}
+            <View style={styles.infoMessage}>
+              <Ionicons name="information-circle" size={20} color={COLORS.PRIMARY} />
+              <Text style={styles.infoText}>
+                You can add GPS or manual addresses on the address screen
+              </Text>
+            </View>
+
+            {/* Modal Buttons */}
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowLocationModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1114,6 +1215,114 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: COLORS.TEXT_SECONDARY,
+    marginBottom: 20,
+  },
+  gpsButton: {
+    backgroundColor: COLORS.PRIMARY,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 15,
+    borderRadius: 10,
+    marginBottom: 20,
+  },
+  gpsButtonText: {
+    color: COLORS.WHITE,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 10,
+  },
+  orText: {
+    textAlign: 'center',
+    color: COLORS.TEXT_SECONDARY,
+    fontSize: 14,
+    marginBottom: 15,
+  },
+  manualLocationContainer: {
+    maxHeight: 250,
+    marginBottom: 15,
+  },
+  inputContainer: {
+    marginBottom: 15,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 8,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: COLORS.BORDER,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    backgroundColor: COLORS.WHITE,
+    color: COLORS.TEXT_PRIMARY,
+  },
+  inputRow: {
+    flexDirection: 'row',
+  },
+  locationSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.SUCCESS + '20',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 15,
+  },
+  locationSummaryText: {
+    marginLeft: 8,
+    fontSize: 12,
+    color: COLORS.SUCCESS,
+    fontFamily: 'monospace',
+  },
+  selectAddressButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 15,
+    borderRadius: 10,
+    backgroundColor: COLORS.WHITE,
+    borderWidth: 2,
+    borderColor: COLORS.PRIMARY,
+    marginBottom: 20,
+  },
+  selectAddressButtonText: {
+    color: COLORS.PRIMARY,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  selectAddressSubtext: {
+    color: COLORS.TEXT_SECONDARY,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  infoMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.PRIMARY + '10',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+    gap: 8,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.TEXT_SECONDARY,
+    lineHeight: 18,
   },
 });
 

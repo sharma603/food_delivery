@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -37,6 +37,10 @@ const Dashboard = ({ navigation }) => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [showItemModal, setShowItemModal] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  // Scroll detection state
+  const [scrollY, setScrollY] = useState(0);
+  const [isSearchVisible, setIsSearchVisible] = useState(true);
   
   // Notification context
   const { badgeCount, clearBadgeCount, notifyPromotion } = useNotifications();
@@ -221,11 +225,27 @@ const Dashboard = ({ navigation }) => {
     loadMenuItems();
   }, []);
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    loadRestaurants();
-    loadMenuItems();
+    await Promise.all([loadRestaurants(), loadMenuItems()]);
+    setRefreshing(false);
   };
+
+  // Handle scroll to hide/show search
+  const handleScroll = useCallback((event) => {
+    const currentScrollY = event.nativeEvent.contentOffset.y;
+    
+    // Show search when scrolling up or at the top
+    if (currentScrollY < scrollY || currentScrollY <= 0) {
+      setIsSearchVisible(true);
+    } 
+    // Hide search when scrolling down and past threshold
+    else if (currentScrollY > 100 && currentScrollY > scrollY) {
+      setIsSearchVisible(false);
+    }
+    
+    setScrollY(currentScrollY);
+  }, [scrollY]);
 
   const renderFoodCategory = ({ item }) => (
     <TouchableOpacity 
@@ -305,7 +325,7 @@ const Dashboard = ({ navigation }) => {
         </Text>
         
         {/* Price */}
-        <Text style={styles.menuItemPrice}>Rs {item.price}</Text>
+        <Text style={styles.menuItemPrice}>Rs {String(item.price || 0)}</Text>
         
         {/* Availability */}
         <Text style={styles.availability}>N/A</Text>
@@ -319,8 +339,8 @@ const Dashboard = ({ navigation }) => {
             <View style={styles.tag}>
               <Text style={styles.tagText}>
                 {typeof item.category === 'object' 
-                  ? (item.category?.name || item.category?.displayName || 'Category')
-                  : item.category
+                  ? String(item.category?.name || item.category?.displayName || 'Category')
+                  : String(item.category)
                 }
               </Text>
             </View>
@@ -523,7 +543,7 @@ const Dashboard = ({ navigation }) => {
         
         {/* Price and Rating */}
         <View style={styles.menuItemFooter}>
-          <Text style={styles.menuItemPrice}>Rs {item.price}</Text>
+          <Text style={styles.menuItemPrice}>Rs {String(item.price || 0)}</Text>
           {item.rating > 0 && (
             <View style={styles.menuItemRating}>
               <Ionicons name="star" size={12} color={COLORS.RATING_COLOR} />
@@ -537,8 +557,8 @@ const Dashboard = ({ navigation }) => {
           <View style={styles.menuItemTag}>
             <Text style={styles.menuItemTagText}>
               {typeof item.category === 'object' 
-                ? (item.category?.name || item.category?.displayName || 'Category')
-                : item.category
+                ? String(item.category?.name || item.category?.displayName || 'Category')
+                : String(item.category)
               }
             </Text>
           </View>
@@ -560,7 +580,7 @@ const Dashboard = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       {/* Enhanced Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, !isSearchVisible && styles.headerCollapsed]}>
         <View style={styles.headerContent}>
           <View style={styles.headerTextContainer}>
             <Text style={styles.headerGreeting}>Good evening!</Text>
@@ -575,7 +595,7 @@ const Dashboard = ({ navigation }) => {
                 navigation.navigate('CartScreen');
               }}
             >
-              <Ionicons name="cart-outline" size={24} color={COLORS.TEXT_PRIMARY} />
+              <Ionicons name="cart-outline" size={20} color="#f0f6fc" />
               {getCartItemCount() > 0 && (
                 <View style={styles.cartBadge}>
                   <Text style={styles.cartBadgeText}>
@@ -594,7 +614,7 @@ const Dashboard = ({ navigation }) => {
                 navigation.navigate('NotificationsScreen');
               }}
             >
-              <Ionicons name="notifications-outline" size={24} color={COLORS.TEXT_PRIMARY} />
+              <Ionicons name="notifications-outline" size={20} color="#f0f6fc" />
               {badgeCount > 0 && (
                 <View style={styles.notificationBadge}>
                   <Text style={styles.notificationBadgeText}>
@@ -605,6 +625,27 @@ const Dashboard = ({ navigation }) => {
             </TouchableOpacity>
           </View>
         </View>
+        
+        {/* Search Bar in Header - Hide on scroll */}
+        {isSearchVisible && (
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputContainer}>
+              <Ionicons name="search-outline" size={18} color={COLORS.TEXT_LIGHT} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search menu & restaurants..."
+                placeholderTextColor={COLORS.TEXT_LIGHT}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                  <Ionicons name="close-circle" size={18} color={COLORS.TEXT_LIGHT} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Enhanced Quick Search Suggestions */}
@@ -665,30 +706,11 @@ const Dashboard = ({ navigation }) => {
         </ScrollView>
       </View>
 
-      {/* Enhanced Search Bar */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchInputContainer}>
-          <Ionicons name="search-outline" size={20} color={COLORS.TEXT_LIGHT} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search menu & restaurants..."
-            placeholderTextColor={COLORS.TEXT_LIGHT}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-              <Ionicons name="close-circle" size={20} color={COLORS.TEXT_LIGHT} />
-            </TouchableOpacity>
-          )}
-        </View>
-        <TouchableOpacity style={styles.filterButton}>
-          <Ionicons name="options-outline" size={20} color={COLORS.PRIMARY} />
-        </TouchableOpacity>
-      </View>
 
       <ScrollView 
         style={styles.content}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
@@ -829,14 +851,13 @@ const Dashboard = ({ navigation }) => {
               <Text style={styles.emptyText}>No restaurants available</Text>
             </View>
           ) : (
-            <FlatList
-              data={restaurantsData}
-              renderItem={renderRestaurant}
-              keyExtractor={(item) => item._id?.toString() || item.id?.toString()}
-              numColumns={2}
-              scrollEnabled={false}
-              contentContainerStyle={styles.restaurantList}
-            />
+            <View style={styles.restaurantGridContainer}>
+              {restaurantsData.map((item) => (
+                <View key={item._id?.toString() || item.id?.toString()} style={{ width: '50%' }}>
+                  {renderRestaurant({ item })}
+                </View>
+              ))}
+            </View>
           )}
         </View>
       </ScrollView>
@@ -913,7 +934,7 @@ const Dashboard = ({ navigation }) => {
                     
                     <View style={styles.itemDetailRow}>
                       <Text style={styles.itemDetailLabel}>Price:</Text>
-                      <Text style={styles.itemDetailTotal}>Rs {selectedItem.price}</Text>
+                      <Text style={styles.itemDetailTotal}>Rs {String(selectedItem.price || 0)}</Text>
                     </View>
 
                     <View style={styles.itemDetailRow}>
@@ -968,7 +989,7 @@ const Dashboard = ({ navigation }) => {
                       onPress={() => {
                         const restaurant = {
                           _id: selectedItem.restaurant?._id || 'unknown',
-                          name: selectedItem.restaurant?.name || 'Unknown Restaurant',
+                          name: selectedItem.restaurant?.name || 'Unknown Ressstaurant',
                           deliveryFee: selectedItem.restaurant?.deliveryFee || 50
                         };
                         addItem(selectedItem, restaurant);
@@ -993,19 +1014,22 @@ const Dashboard = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.BACKGROUND,
+    backgroundColor: '#0d1117', // Dark background
   },
   header: {
-    backgroundColor: COLORS.WHITE,
+    backgroundColor: '#161b22', // Dark header
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER,
-    shadowColor: COLORS.SHADOW,
+    borderBottomColor: '#30363d',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 8,
+  },
+  headerCollapsed: {
+    paddingVertical: 4,
   },
   headerContent: {
     flexDirection: 'row',
@@ -1016,20 +1040,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerGreeting: {
-    fontSize: 14,
-    color: COLORS.TEXT_SECONDARY,
-    marginBottom: 2,
+    fontSize: 11,
+    color: '#8b949e',
+    marginBottom: 0,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.PRIMARY,
     letterSpacing: 1,
-    marginBottom: 2,
+    marginBottom: 0,
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: COLORS.TEXT_SECONDARY,
+    fontSize: 11,
+    color: '#8b949e',
   },
   headerActions: {
     flexDirection: 'row',
@@ -1129,24 +1153,24 @@ const styles = StyleSheet.create({
   quickSearchText: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.TEXT_PRIMARY,
+    color: '#f0f6fc',
     marginLeft: 8,
   },
   suggestionsScroll: {
     flex: 1,
   },
   suggestionChip: {
-    backgroundColor: COLORS.BACKGROUND,
+    backgroundColor: '#161b22',
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: COLORS.BORDER,
+    borderColor: '#30363d',
   },
   suggestionText: {
     fontSize: 12,
-    color: COLORS.TEXT_PRIMARY,
+    color: '#f0f6fc',
     fontWeight: '500',
     marginLeft: 6,
   },
@@ -1157,29 +1181,29 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 20,
-    marginVertical: 12,
-    gap: 12,
+    marginTop: 8,
+    marginHorizontal: 0,
+    gap: 0,
   },
   searchInputContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.WHITE,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    elevation: 2,
+    backgroundColor: '#21262d',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    elevation: 1,
     shadowColor: COLORS.SHADOW,
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05,
     shadowRadius: 2,
   },
   clearButton: {
     padding: 4,
   },
   filterButton: {
-    backgroundColor: COLORS.WHITE,
+    backgroundColor: '#161b22',
     borderRadius: 12,
     padding: 12,
     elevation: 2,
@@ -1190,9 +1214,10 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    marginLeft: 8,
-    fontSize: 14,
-    color: COLORS.TEXT_PRIMARY,
+    marginLeft: 6,
+    fontSize: 13,
+    color: '#f0f6fc',
+    height: 36,
   },
   content: {
     flex: 1,
@@ -1203,7 +1228,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.TEXT_PRIMARY,
+    color: '#f0f6fc',
     marginHorizontal: 20,
     marginBottom: 12,
   },
@@ -1216,7 +1241,7 @@ const styles = StyleSheet.create({
   sectionTitleText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.TEXT_PRIMARY,
+    color: '#f0f6fc',
     marginLeft: 8,
   },
   categoryCard: {
@@ -1224,7 +1249,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
     paddingVertical: 16,
     paddingHorizontal: 12,
-    backgroundColor: COLORS.WHITE,
+    backgroundColor: '#161b22',
     borderRadius: 12,
     minWidth: 80,
     elevation: 1,
@@ -1236,14 +1261,14 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: COLORS.BACKGROUND,
+    backgroundColor: '#21262d',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
   },
   categoryName: {
     fontSize: 12,
-    color: COLORS.TEXT_PRIMARY,
+    color: '#f0f6fc',
     textAlign: 'center',
     fontWeight: '600',
   },
@@ -1251,17 +1276,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   restaurantCard: {
-    flex: 1,
-    marginHorizontal: 8,
+    marginHorizontal: 4,
     marginVertical: 8,
-    backgroundColor: COLORS.WHITE,
-    borderRadius: 16,
+    backgroundColor: '#161b22',
+    borderRadius: 12,
     overflow: 'hidden',
-    elevation: 6,
+    elevation: 4,
     shadowColor: COLORS.SHADOW,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
-    shadowRadius: 6,
+    shadowRadius: 4,
   },
   restaurantImageContainer: {
     height: 140,
@@ -1279,7 +1303,7 @@ const styles = StyleSheet.create({
   restaurantImagePlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: COLORS.BACKGROUND,
+    backgroundColor: '#21262d',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1332,7 +1356,7 @@ const styles = StyleSheet.create({
   restaurantName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: COLORS.TEXT_PRIMARY,
+    color: '#f0f6fc',
     flex: 1,
     marginRight: 8,
   },
@@ -1341,7 +1365,7 @@ const styles = StyleSheet.create({
   },
   restaurantCuisine: {
     fontSize: 13,
-    color: COLORS.TEXT_SECONDARY,
+    color: '#8b949e',
     marginBottom: 8,
   },
   restaurantStats: {
@@ -1356,7 +1380,7 @@ const styles = StyleSheet.create({
   },
   rating: {
     fontSize: 12,
-    color: COLORS.TEXT_PRIMARY,
+    color: '#f0f6fc',
     marginLeft: 4,
     fontWeight: '600',
   },
@@ -1366,7 +1390,7 @@ const styles = StyleSheet.create({
   },
   deliveryTime: {
     fontSize: 12,
-    color: COLORS.TEXT_SECONDARY,
+    color: '#8b949e',
     marginLeft: 4,
   },
   restaurantFooter: {
@@ -1376,13 +1400,13 @@ const styles = StyleSheet.create({
   },
   deliveryFee: {
     fontSize: 12,
-    color: COLORS.TEXT_SECONDARY,
+    color: '#8b949e',
     fontWeight: '600',
   },
   viewMenuButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.BACKGROUND,
+    backgroundColor: '#21262d',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
@@ -1395,6 +1419,11 @@ const styles = StyleSheet.create({
   },
   restaurantList: {
     paddingHorizontal: 12,
+  },
+  restaurantGridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 4,
   },
   loadingContainer: {
     flex: 1,
@@ -1446,7 +1475,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   menuItemCard: {
-    backgroundColor: COLORS.WHITE,
+    backgroundColor: '#161b22',
     borderRadius: 12,
     marginRight: 16,
     width: 180,
@@ -1459,7 +1488,7 @@ const styles = StyleSheet.create({
   },
   // Grid version for ALL Menu section
   menuItemCardGrid: {
-    backgroundColor: COLORS.WHITE,
+    backgroundColor: '#161b22',
     borderRadius: 16,
     marginHorizontal: 4,
     marginBottom: 16,
@@ -1485,7 +1514,7 @@ const styles = StyleSheet.create({
   menuItemImagePlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: COLORS.BACKGROUND,
+    backgroundColor: '#21262d',
     justifyContent: 'center',
     alignItems: 'center',
   },

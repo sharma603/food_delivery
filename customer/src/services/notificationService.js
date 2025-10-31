@@ -15,8 +15,18 @@ class NotificationService {
   // Register for push notifications
   async registerForPushNotificationsAsync() {
     try {
+      // Check if running in Expo Go
       if (this.isExpoGo) {
-        console.log('Running in Expo Go - notifications disabled');
+        console.log('📱 Running in Expo Go - push notifications disabled');
+        console.log('💡 Use a development build for full notification support');
+        return null;
+      }
+
+      // Check if projectId exists before trying to get token
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      if (!projectId) {
+        console.log('⚠️ No projectId found - skipping push token registration');
+        console.log('💡 Configure EAS project for push notifications');
         return null;
       }
 
@@ -29,18 +39,20 @@ class NotificationService {
       }
       
       if (finalStatus !== 'granted') {
-        console.log('Failed to get push token for push notification!');
+        console.log('❌ Failed to get push token for push notification!');
         return null;
       }
       
       const token = await Notifications.getExpoPushTokenAsync({
-        projectId: Constants.expoConfig?.extra?.eas?.projectId,
+        projectId: projectId,
       });
       
       this.expoPushToken = token.data;
+      console.log('✅ Push token registered successfully');
       return token.data;
     } catch (error) {
-      console.log('Notification registration failed:', error);
+      console.log('❌ Notification registration failed:', error);
+      // Don't throw error, just return null for graceful degradation
       return null;
     }
   }
@@ -48,10 +60,16 @@ class NotificationService {
   // Mock send push notification
   async sendPushNotification(expoPushToken, message) {
     try {
-      console.log('Mock sending notification:', message);
+      if (this.isExpoGo) {
+        console.log('📱 Mock notification (Expo Go):', message);
+        console.log('💡 Use development build for real push notifications');
+        return { success: true, mock: true };
+      }
+      
+      console.log('📤 Sending push notification:', message);
       return { success: true };
     } catch (error) {
-      console.log('Mock notification send failed:', error);
+      console.log('❌ Mock notification send failed:', error);
       return { success: false };
     }
   }

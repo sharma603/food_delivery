@@ -237,33 +237,9 @@ const OrdersScreen = ({ navigation }) => {
 
       const response = await mobileOrderAPI.getOrders(params);
       
-      console.log('📊 Orders response:', response);
       
       if (response.success) {
         const orderData = response.data || [];
-        console.log('✅ Orders loaded:', orderData.length);
-        console.log('📊 Sample order data:', orderData[0] ? {
-          _id: orderData[0]._id,
-          orderNumber: orderData[0].orderNumber,
-          totalAmount: orderData[0].totalAmount,
-          finalAmount: orderData[0].finalAmount,
-          subtotal: orderData[0].subtotal,
-          grandTotal: orderData[0].grandTotal,
-          amount: orderData[0].amount,
-          status: orderData[0].status,
-          hasItems: !!orderData[0].items,
-          itemsCount: orderData[0].items?.length || 0,
-          firstItem: orderData[0].items?.[0] ? {
-            name: orderData[0].items[0].item?.name || orderData[0].items[0].menuItem?.name,
-            price: orderData[0].items[0].price,
-            quantity: orderData[0].items[0].quantity,
-            hasImage: !!(orderData[0].items[0].image || orderData[0].items[0].item?.image || orderData[0].items[0].menuItem?.image)
-          } : null,
-          restaurant: orderData[0].restaurant ? {
-            name: orderData[0].restaurant.name,
-            hasImage: !!(orderData[0].restaurant.image || orderData[0].restaurant.imageUrl || orderData[0].restaurant.photo)
-          } : null
-        } : 'No orders found');
         setOrders(orderData);
         setFilteredOrders(filterAndSortOrders(orderData));
       } else {
@@ -275,7 +251,6 @@ const OrdersScreen = ({ navigation }) => {
         }
       }
     } catch (err) {
-      console.error('❌ Error loading orders:', err);
       
       // Handle specific error cases
       if (err.message === 'User not found' || err.message?.includes('not found')) {

@@ -12,7 +12,7 @@ import {
   RefreshControl,
   TextInput
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SERVER_IP, SERVER_PORT } from '../utils/constants';
 import { mobileRestaurantAPI, mobileMenuAPI } from '../services/mobileAPI';
@@ -32,7 +32,8 @@ const RestaurantDetailScreen = ({ route, navigation }) => {
 
   // Format price for display
   const formatPrice = (price) => {
-    return `Rs ${price.toLocaleString('en-NP')}`;
+    const numPrice = Number(price) || 0;
+    return `Rs ${numPrice.toLocaleString('en-NP')}`;
   };
 
   // Get image source for menu items
@@ -359,8 +360,12 @@ const RestaurantDetailScreen = ({ route, navigation }) => {
                   {typeof restaurant?.rating === 'object' ? (restaurant.rating?.average || 'N/A') : (restaurant?.rating || 'N/A')}
                 </Text>
               </View>
-              <Text style={styles.deliveryTime}>{restaurant?.deliveryTime || '25 mins'}</Text>
-              <Text style={styles.deliveryFee}>{restaurant?.deliveryFee || 'Rs 50'}</Text>
+              <Text style={styles.deliveryTime}>
+                {typeof restaurant?.deliveryTime === 'string' ? restaurant.deliveryTime : '25 mins'}
+              </Text>
+              <Text style={styles.deliveryFee}>
+                {typeof restaurant?.deliveryFee === 'number' ? `Rs ${restaurant.deliveryFee}` : 'Rs 50'}
+              </Text>
             </View>
           </View>
         )}

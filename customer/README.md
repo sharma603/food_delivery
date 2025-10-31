@@ -1,136 +1,254 @@
-# HypeBridge Customer App
+# Food Delivery System - Customer Mobile App
 
-A React Native customer application for the HypeBridge food delivery platform.
+A React Native mobile application for customers to order food from restaurants, built with Expo and React Navigation.
 
-## Features
+## 🚀 Features
 
-- **User Registration**: Full registration with name, email, phone, and password
-- **User Login**: Secure login with email validation
-- **Dashboard**: Overview of user stats and quick actions
-- **Authentication Context**: Centralized authentication state management
-- **API Integration**: Connected to HypeBridge backend API
-- **Responsive Design**: Optimized for mobile devices
+- **User Authentication**: Registration, login, forgot password
+- **Restaurant Discovery**: Browse restaurants and view menus
+- **Order Management**: Place orders, track status, view history
+- **Address Management**: Add and manage delivery addresses
+- **Shopping Cart**: Add items, modify quantities, checkout
+- **Push Notifications**: Order updates and promotions
+- **Location Services**: GPS-based restaurant discovery
+- **Offline Support**: Basic offline functionality
 
-## Installation
+## 📋 Prerequisites
 
-1. Install dependencies:
-```bash
-npm install
+- Node.js (>= 16.0.0)
+- npm (>= 8.0.0)
+- Expo CLI
+- Android Studio / Xcode (for device testing)
+
+## 🛠️ Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd customer
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Environment Configuration**
+   ```bash
+   # Create .env file
+   echo "EXPO_PUBLIC_SERVER_IP=your-server-ip" > .env
+   echo "EXPO_PUBLIC_SERVER_PORT=5000" >> .env
+   ```
+
+4. **Start the development server**
+   ```bash
+   npm start
+   ```
+
+5. **Run on device/emulator**
+   ```bash
+   # Android
+   npm run android
+   
+   # iOS
+   npm run ios
+   ```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `EXPO_PUBLIC_SERVER_IP` | Backend server IP address | Yes | `localhost` |
+| `EXPO_PUBLIC_SERVER_PORT` | Backend server port | No | `5000` |
+
+### API Configuration
+
+The app connects to the backend API at:
+```
+http://${SERVER_IP}:${SERVER_PORT}/api/v1
 ```
 
-2. Make sure the backend server is running on `http://localhost:5000`
-
-3. Start the Expo development server:
-```bash
-npm start
-```
-
-## Project Structure
+## 📱 App Structure
 
 ```
 customer/
 ├── src/
-│   ├── components/          # Reusable components
-│   │   └── Header.js       # Header component
-│   ├── context/            # React Context providers
-│   │   └── AuthContext.js  # Authentication context
-│   ├── navigation/          # Navigation components
-│   │   ├── AuthNavigator.js # Authentication screens
-│   │   └── AppNavigator.js  # Main app screens
-│   ├── screens/            # Screen components
-│   │   ├── LoginScreen.js   # Login screen
-│   │   ├── RegisterScreen.js # Registration screen
-│   │   └── DashboardScreen.js # Main dashboard
-│   └── services/           # API services
-│       └── api.js          # API client
-├── App.js                  # Main app component
-└── package.json           # Dependencies
+│   ├── components/     # Reusable UI components
+│   ├── context/        # React Context providers
+│   ├── navigation/     # Navigation configuration
+│   ├── screens/        # App screens
+│   ├── services/       # API services
+│   ├── utils/          # Utility functions
+│   └── hooks/          # Custom React hooks
+├── assets/             # Images and static assets
+├── App.js              # Main app component
+└── package.json        # Dependencies and scripts
 ```
 
-## API Endpoints Used
+## 🔑 Key Features
 
-The app connects to the HypeBridge backend customer authentication endpoints:
+### Authentication
+- **Registration**: Create new customer account
+- **Login**: Sign in with email/phone and password
+- **Forgot Password**: Reset password via email
+- **Profile Management**: Update personal information
 
-- `POST /api/customer/auth/register` - Customer registration
-- `POST /api/customer/auth/login` - Customer login  
-- `GET /api/customer/auth/me` - Get customer profile
-- `PUT /api/customer/auth/profile` - Update profile
-- `POST /api/customer/auth/address` - Add address
-- `PUT /api/customer/auth/change-password` - Change password
+### Restaurant & Menu
+- **Restaurant List**: Browse available restaurants
+- **Menu Items**: View restaurant menus with categories
+- **Search**: Search restaurants and menu items
+- **Filters**: Filter by cuisine, price, ratings
 
-## Usage
+### Ordering
+- **Shopping Cart**: Add/remove items, modify quantities
+- **Checkout**: Review order, select address, payment
+- **Order Tracking**: Real-time order status updates
+- **Order History**: View past orders
 
-### Registration
-- Users can register by providing:
-  - Full Name
-  - Email Address
-  - Phone Number
-  - Password (minimum 6 characters)
-  - Password Confirmation
+### Address Management
+- **Add Address**: Nepal-specific address system
+- **Edit Address**: Modify existing addresses
+- **Default Address**: Set preferred delivery address
+- **Location Services**: GPS-based address detection
 
-### Login
-- Users can login with:
-  - Email Address
-  - Password
+## 🎨 UI/UX Features
 
-### Dashboard
-- View user statistics (orders, loyalty points, total spent)
-- Quick access to main features
-- Account management options
+- **Modern Design**: Clean, intuitive interface
+- **Responsive Layout**: Works on different screen sizes
+- **Dark/Light Theme**: Theme support (configurable)
+- **Loading States**: Proper loading indicators
+- **Error Handling**: User-friendly error messages
+- **Offline Support**: Basic offline functionality
 
-## Authentication Flow
+## 📦 Dependencies
 
-1. App checks for stored authentication token on startup
-2. If token exists and is valid, user is automatically logged in
-3. If no token or invalid token, user sees login/register screen
-4. After successful login/registration, token is stored securely
-5. User can logout which clears stored authentication data
+### Core Dependencies
+- **React Native**: Mobile app framework
+- **Expo**: Development platform and tools
+- **React Navigation**: Navigation library
+- **Axios**: HTTP client for API calls
+- **AsyncStorage**: Local data persistence
 
-## Development
+### UI Dependencies
+- **React Native Vector Icons**: Icon library
+- **React Native Safe Area Context**: Safe area handling
+- **React Native Gesture Handler**: Touch gestures
 
-### Starting the App
+### Feature Dependencies
+- **Expo Notifications**: Push notifications
+- **Expo Location**: GPS and location services
+- **Expo Constants**: App configuration
+
+## 🚀 Building for Production
+
+### Android APK
 ```bash
-# Start Expo development server
-npm start
+# Build APK
+expo build:android
 
-# For Android
-npm run android
-
-# For iOS  
-npm run ios
-
-# For Web
-npm run web
+# Or use EAS Build
+eas build --platform android
 ```
 
-### Modifying the Backend URL
-Update the `BASE_URL` in `src/services/api.js` to point to your backend server.
+### iOS App
+```bash
+# Build iOS app
+expo build:ios
 
-## Dependencies
+# Or use EAS Build
+eas build --platform ios
+```
 
-- React Native & Expo
-- React Navigation (Stack Navigator)
-- Axios (HTTP client)
-- AsyncStorage (Secure storage)
-- React Context (State management)
-- Expo Vector Icons (Icons)
+### Web App
+```bash
+# Build web version
+expo build:web
+```
 
-## Security Features
+## 📱 Device Testing
 
-- JWT token based authentication
-- Secure token storage using AsyncStorage
-- Password validation (minimum length)
-- Email validation
-- Phone number validation
-- Automatic token refresh handling
-- Protected routes requiring authentication
+### Android
+1. Install Expo Go app from Play Store
+2. Scan QR code from `npm start`
+3. Or run `npm run android` for emulator
 
-## Next Steps
+### iOS
+1. Install Expo Go app from App Store
+2. Scan QR code from `npm start`
+3. Or run `npm run ios` for simulator
 
-- Add restaurant listing screens
-- Implement order management
-- Add payment integration
-- Implement push notifications
-- Add profile management
-- Implement address management
+## 🔧 Development
 
+### Code Structure
+- **Components**: Reusable UI components
+- **Screens**: Main app screens
+- **Services**: API communication
+- **Context**: State management
+- **Utils**: Helper functions
+
+### State Management
+- **AuthContext**: User authentication state
+- **CartContext**: Shopping cart state
+- **NotificationContext**: Push notification state
+
+### API Integration
+- **mobileAPI.js**: Main API service
+- **addressService.js**: Address-related API calls
+- **notificationService.js**: Push notification handling
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **Metro bundler issues**
+   ```bash
+   npx expo start --clear
+   ```
+
+2. **Dependency conflicts**
+   ```bash
+   rm -rf node_modules package-lock.json
+   npm install
+   ```
+
+3. **Android build issues**
+   ```bash
+   cd android && ./gradlew clean
+   ```
+
+4. **iOS build issues**
+   ```bash
+   cd ios && pod install
+   ```
+
+## 📊 Performance
+
+- **Image Optimization**: Optimized image loading
+- **Lazy Loading**: Components loaded on demand
+- **Caching**: API response caching
+- **Bundle Size**: Optimized bundle size
+
+## 🔒 Security
+
+- **Token Storage**: Secure token storage
+- **API Security**: HTTPS communication
+- **Input Validation**: Client-side validation
+- **Error Handling**: Secure error messages
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🆘 Support
+
+For support and questions, please contact the development team or create an issue in the repository.
