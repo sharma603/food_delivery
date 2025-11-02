@@ -164,7 +164,7 @@ export const getAvailableOrders = asyncHandler(async (req, res) => {
     assignedDeliveryPerson: { $exists: false }
   })
     .populate('restaurant', 'name address phone location')
-    .populate('customer', 'name phone address')
+    .populate('customer', 'name phone email addresses')
     .populate('zone', 'name')
     .sort({ createdAt: -1 })
     .limit(20);
@@ -199,7 +199,7 @@ export const getMyOrders = asyncHandler(async (req, res) => {
 export const getOrderDetails = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.orderId)
     .populate('restaurant', 'name address phone location')
-    .populate('customer', 'name phone address')
+    .populate('customer', 'name phone email addresses')
     .populate('zone', 'name')
     .populate('assignedDeliveryPerson', 'name phone vehicleType vehicleNumber');
 
@@ -399,44 +399,96 @@ export const getEarnings = asyncHandler(async (req, res) => {
     });
   }
 
-  // Calculate date range based on period
   const now = new Date();
-  let startDate;
   
-  switch (period) {
-    case 'today':
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      break;
-    case 'week':
-      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      break;
-    case 'month':
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      break;
-    default:
-      startDate = new Date(0); // All time
-  }
+  // Calculate date ranges for all periods
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfWeek = new Date(startOfToday);
+  startOfWeek.setDate(startOfToday.getDate() - startOfToday.getDay());
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  
+  // Helper function to get delivery charge from order
+  const getDeliveryCharge = (order) => {
+    return order.deliveryCharge || 
+           order.pricing?.deliveryFee || 
+           0;
+  };
 
-  // Get completed orders in the period
-  const completedOrders = await Order.find({
-    assignedDeliveryPerson: req.user._id,
-    deliveryStatus: 'delivered',
-    deliveredAt: { $gte: startDate }
-  });
+  // Get all completed orders assigned to this delivery person
+  // Try multiple field names for delivery person assignment
+  const allOrders = await Order.find({
+    $or: [
+      { deliveryPerson: req.user._id },
+      { deliveryPersonnel: req.user._id },
+      { assignedDeliveryPerson: req.user._id }
+    ],
+    status: 'delivered',
+    deliveredAt: { $exists: true }
+  }).select('deliveryCharge pricing.deliveryFee deliveredAt status').lean();
 
-  const totalEarnings = completedOrders.reduce((sum, order) => {
-    return sum + (order.deliveryCharge || 0);
-  }, 0);
+  // Calculate today's earnings
+  const todayOrders = allOrders.filter(order => 
+    new Date(order.deliveredAt) >= startOfToday
+  );
+  const todayEarnings = todayOrders.reduce((sum, order) => sum + getDeliveryCharge(order), 0);
+  const todayDeliveries = todayOrders.length;
 
-  const totalDeliveries = completedOrders.length;
+  // Calculate week's earnings
+  const weekOrders = allOrders.filter(order => 
+    new Date(order.deliveredAt) >= startOfWeek
+  );
+  const weekEarnings = weekOrders.reduce((sum, order) => sum + getDeliveryCharge(order), 0);
+  const weekDeliveries = weekOrders.length;
+
+  // Calculate month's earnings
+  const monthOrders = allOrders.filter(order => 
+    new Date(order.deliveredAt) >= startOfMonth
+  );
+  const monthEarnings = monthOrders.reduce((sum, order) => sum + getDeliveryCharge(order), 0);
+  const monthDeliveries = monthOrders.length;
+
+  // Calculate total earnings (all time)
+  const totalEarnings = allOrders.reduce((sum, order) => sum + getDeliveryCharge(order), 0);
+  const totalDeliveries = allOrders.length;
+
+  // Calculate averages
   const averageEarningPerDelivery = totalDeliveries > 0 ? totalEarnings / totalDeliveries : 0;
+  
+  // Calculate hourly rate based on today's data
+  let hourlyRate = 0;
+  if (deliveryPerson.isOnline && deliveryPerson.onlineAt) {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    let todayOnlineTime = deliveryPerson.todayOnlineTime || 0;
+    
+    if (new Date(deliveryPerson.onlineAt) >= startOfToday) {
+      const currentSessionTime = Math.floor((new Date() - deliveryPerson.onlineAt) / (1000 * 60));
+      todayOnlineTime += currentSessionTime;
+    } else {
+      const currentSessionTime = Math.floor((new Date() - startOfToday) / (1000 * 60));
+      todayOnlineTime = currentSessionTime;
+    }
+    
+    const workHours = Math.max(1, Math.floor(todayOnlineTime / 60));
+    hourlyRate = todayEarnings > 0 ? Math.round(todayEarnings / workHours) : 0;
+  } else if (deliveryPerson.todayOnlineTime > 0) {
+    const workHours = Math.max(1, Math.floor(deliveryPerson.todayOnlineTime / 60));
+    hourlyRate = todayEarnings > 0 ? Math.round(todayEarnings / workHours) : 0;
+  }
 
   res.json({
     success: true,
     data: {
+      todayEarnings,
+      weekEarnings,
+      monthEarnings,
       totalEarnings,
+      todayDeliveries,
+      weekDeliveries,
+      monthDeliveries,
       totalDeliveries,
       averageEarningPerDelivery,
+      hourlyRate,
       period
     }
   });
@@ -446,17 +498,60 @@ export const getEarnings = asyncHandler(async (req, res) => {
 // @route   GET /api/v1/delivery/earnings/history
 // @access  Private (Delivery Person)
 export const getEarningsHistory = asyncHandler(async (req, res) => {
+  // Get all completed orders assigned to this delivery person
+  // Try multiple field names for delivery person assignment
   const completedOrders = await Order.find({
-    assignedDeliveryPerson: req.user._id,
-    deliveryStatus: 'delivered'
+    $or: [
+      { deliveryPerson: req.user._id },
+      { deliveryPersonnel: req.user._id },
+      { assignedDeliveryPerson: req.user._id }
+    ],
+    status: 'delivered',
+    deliveredAt: { $exists: true }
   })
-    .select('deliveryCharge deliveredAt')
+    .select('deliveryCharge pricing.deliveryFee deliveredAt status orderNumber')
     .sort({ deliveredAt: -1 })
-    .limit(50);
+    .limit(50)
+    .lean();
+
+  // Helper function to get delivery charge from order
+  const getDeliveryCharge = (order) => {
+    return order.deliveryCharge || 
+           order.pricing?.deliveryFee || 
+           0;
+  };
+
+  // Group orders by date
+  const earningsByDate = {};
+  
+  completedOrders.forEach(order => {
+    const deliveryDate = new Date(order.deliveredAt);
+    const dateKey = deliveryDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    if (!earningsByDate[dateKey]) {
+      earningsByDate[dateKey] = {
+        date: dateKey,
+        amount: 0,
+        deliveries: 0
+      };
+    }
+    
+    earningsByDate[dateKey].amount += getDeliveryCharge(order);
+    earningsByDate[dateKey].deliveries += 1;
+  });
+
+  // Convert to array format expected by frontend
+  const earningsHistory = Object.values(earningsByDate).map((item, index) => ({
+    id: `earning-${index}`,
+    date: item.date,
+    amount: Math.round(item.amount),
+    deliveries: item.deliveries,
+    type: 'daily'
+  }));
 
   res.json({
     success: true,
-    data: completedOrders
+    data: earningsHistory
   });
 });
 
@@ -546,44 +641,85 @@ export const getStats = asyncHandler(async (req, res) => {
 // @route   GET /api/v1/delivery/notifications
 // @access  Private (Delivery Person)
 export const getNotifications = asyncHandler(async (req, res) => {
-  // This would typically come from a notifications collection
-  // For now, return mock data
-  const notifications = [
-    {
-      id: '1',
-      title: 'New Order Available',
-      message: 'You have a new delivery order from Pizza Palace',
-      type: 'new_order',
-      read: false,
-      createdAt: new Date()
-    },
-    {
-      id: '2',
-      title: 'Order Completed',
-      message: 'Order #12345 has been completed successfully',
-      type: 'order_completed',
-      read: true,
-      createdAt: new Date(Date.now() - 3600000)
-    }
-  ];
+  const deliveryPersonId = req.user._id;
 
-  res.json({
-    success: true,
-    data: notifications
-  });
+  try {
+    // Try to get notifications from Notification model if it exists
+    const Notification = (await import('../../models/Notification/Notification.js')).default;
+    
+    const notifications = await Notification.find({
+      recipient: deliveryPersonId,
+      recipientType: 'delivery'
+    })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .select('title message type read createdAt _id')
+      .lean();
+
+    // Format notifications for response
+    const formattedNotifications = notifications.map(notif => ({
+      _id: notif._id.toString(),
+      title: notif.title || 'Notification',
+      message: notif.message || '',
+      type: notif.type || 'general',
+      read: notif.read || false,
+      createdAt: notif.createdAt
+    }));
+
+    res.json({
+      success: true,
+      data: formattedNotifications
+    });
+  } catch (error) {
+    // If Notification model doesn't exist or error occurs, return empty array
+    console.log('Notifications model not available or error:', error.message);
+    res.json({
+      success: true,
+      data: []
+    });
+  }
 });
 
 // @desc    Mark notification as read
 // @route   PUT /api/v1/delivery/notifications/:notificationId/read
 // @access  Private (Delivery Person)
 export const markNotificationRead = asyncHandler(async (req, res) => {
-  // This would typically update a notifications collection
-  // For now, return success
-  
-  res.json({
-    success: true,
-    message: 'Notification marked as read'
-  });
+  const deliveryPersonId = req.user._id;
+  const notificationId = req.params.notificationId;
+
+  try {
+    // Try to update notification in Notification model if it exists
+    const Notification = (await import('../../models/Notification/Notification.js')).default;
+    
+    const notification = await Notification.findOneAndUpdate(
+      {
+        _id: notificationId,
+        recipient: deliveryPersonId,
+        recipientType: 'delivery'
+      },
+      { read: true },
+      { new: true }
+    );
+
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        message: 'Notification not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Notification marked as read'
+    });
+  } catch (error) {
+    // If Notification model doesn't exist or error occurs, return success anyway
+    console.log('Notifications model not available or error:', error.message);
+    res.json({
+      success: true,
+      message: 'Notification marked as read'
+    });
+  }
 });
 
 // @desc    Get delivery person dashboard data
@@ -696,9 +832,27 @@ export const getDashboard = asyncHandler(async (req, res) => {
       });
     }
     
+    // Get active orders (orders in progress, not delivered or cancelled)
+    // Try multiple field names in case the schema varies
+    const activeOrdersCount = await Order.countDocuments({
+      $or: [
+        { deliveryPerson: deliveryPersonId },
+        { deliveryPersonnel: deliveryPersonId },
+        { assignedDeliveryPerson: deliveryPersonId }
+      ],
+      status: { 
+        $nin: ['delivered', 'cancelled'],
+        $in: ['confirmed', 'preparing', 'ready', 'picked_up']
+      }
+    });
+
     // Get recent orders (last 5)
     const recentOrders = await Order.find({
-      deliveryPersonnel: deliveryPersonId,
+      $or: [
+        { deliveryPerson: deliveryPersonId },
+        { deliveryPersonnel: deliveryPersonId },
+        { assignedDeliveryPerson: deliveryPersonId }
+      ],
       status: { $in: ['delivered', 'picked_up', 'in_transit'] }
     })
     .populate('customer', 'name phone')
@@ -719,27 +873,152 @@ export const getDashboard = asyncHandler(async (req, res) => {
     
     // Calculate real online time
     let onlineTime = '0h 0m';
-    if (deliveryPerson.isOnline && deliveryPerson.onlineAt) {
+    
+    // Get start of today for comparison
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    
+    // Ensure todayOnlineTime is a number (default to 0 if undefined/null)
+    let todayOnlineTime = deliveryPerson.todayOnlineTime || 0;
+    
+    // If onlineAt exists but is from a previous day, we need to reset todayOnlineTime
+    // This handles cases where the user was online before midnight
+    if (deliveryPerson.onlineAt && new Date(deliveryPerson.onlineAt) < startOfToday) {
+      // If they're still online but onlineAt is from yesterday, only count time from today
+      if (deliveryPerson.isOnline) {
+        // Reset todayOnlineTime and only count time from today
+        todayOnlineTime = 0;
+        const currentSessionTime = Math.floor((new Date() - startOfToday) / (1000 * 60)); // minutes since midnight
+        const totalTodayTime = todayOnlineTime + currentSessionTime;
+        const hours = Math.floor(totalTodayTime / 60);
+        const minutes = totalTodayTime % 60;
+        onlineTime = `${hours}h ${minutes}m`;
+      } else {
+        // They were online yesterday but are offline now - reset todayOnlineTime
+        todayOnlineTime = 0;
+      }
+    } else if (deliveryPerson.isOnline && deliveryPerson.onlineAt) {
       // Calculate current session time + today's accumulated time
       const currentSessionTime = Math.floor((new Date() - deliveryPerson.onlineAt) / (1000 * 60)); // minutes
-      const totalTodayTime = deliveryPerson.todayOnlineTime + currentSessionTime;
+      const totalTodayTime = todayOnlineTime + currentSessionTime;
       
       const hours = Math.floor(totalTodayTime / 60);
       const minutes = totalTodayTime % 60;
       onlineTime = `${hours}h ${minutes}m`;
-    } else if (deliveryPerson.todayOnlineTime > 0) {
+    } else if (todayOnlineTime > 0) {
       // Show today's accumulated time even if currently offline
-      const hours = Math.floor(deliveryPerson.todayOnlineTime / 60);
-      const minutes = deliveryPerson.todayOnlineTime % 60;
+      const hours = Math.floor(todayOnlineTime / 60);
+      const minutes = todayOnlineTime % 60;
       onlineTime = `${hours}h ${minutes}m`;
     }
     
     // Calculate hourly earnings based on actual online time
-    const totalTodayMinutes = deliveryPerson.isOnline && deliveryPerson.onlineAt ? 
-      deliveryPerson.todayOnlineTime + Math.floor((new Date() - deliveryPerson.onlineAt) / (1000 * 60)) :
-      deliveryPerson.todayOnlineTime;
+    // Use the same logic as onlineTime calculation
+    let totalTodayMinutes = todayOnlineTime || 0;
+    if (deliveryPerson.isOnline && deliveryPerson.onlineAt) {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      
+      if (new Date(deliveryPerson.onlineAt) >= startOfToday) {
+        // onlineAt is from today, calculate normally
+        const currentSessionTime = Math.floor((new Date() - deliveryPerson.onlineAt) / (1000 * 60));
+        totalTodayMinutes = todayOnlineTime + currentSessionTime;
+      } else {
+        // onlineAt is from previous day, only count time from today
+        const currentSessionTime = Math.floor((new Date() - startOfToday) / (1000 * 60));
+        totalTodayMinutes = currentSessionTime;
+      }
+    }
     const workHours = Math.max(1, Math.floor(totalTodayMinutes / 60));
     const hourlyEarnings = todayEarnings > 0 ? Math.round(todayEarnings / workHours) : 0;
+    
+    // Calculate estimated earnings for the day
+    // Only estimate if user is online
+    let estimatedEarnings = todayEarnings;
+    if (deliveryPerson.isOnline) {
+      if (hourlyEarnings > 0) {
+        // Project 2 more hours at current rate
+        estimatedEarnings = todayEarnings + (hourlyEarnings * 2);
+      } else if (deliveryPerson.earnings > 0 && deliveryPerson.totalDeliveries > 0) {
+        // Use average earnings per delivery
+        const avgEarningsPerDelivery = deliveryPerson.earnings / deliveryPerson.totalDeliveries;
+        // Estimate 3-5 more deliveries today if online
+        const expectedDeliveries = 4;
+        estimatedEarnings = todayEarnings + (avgEarningsPerDelivery * expectedDeliveries);
+      } else {
+        // Fallback: use zone delivery charge if available
+        const zoneDeliveryCharge = deliveryPerson.zone?.deliveryCharge || 50;
+        const expectedDeliveries = 4;
+        estimatedEarnings = todayEarnings + (zoneDeliveryCharge * expectedDeliveries);
+      }
+    }
+    // If offline, estimatedEarnings = todayEarnings (already set)
+    
+    // Calculate Next Order ETA
+    let nextOrderETA = null;
+    try {
+      // Find the next active order assigned to this delivery person
+      const nextActiveOrder = await Order.findOne({
+        $or: [
+          { deliveryPerson: deliveryPersonId },
+          { deliveryPersonnel: deliveryPersonId },
+          { assignedDeliveryPerson: deliveryPersonId }
+        ],
+        status: { $in: ['confirmed', 'ready', 'picked_up'] }
+      })
+      .sort({ createdAt: 1 })
+      .select('estimatedDeliveryTime createdAt status pickedUpAt')
+      .lean();
+      
+      if (nextActiveOrder) {
+        if (nextActiveOrder.estimatedDeliveryTime) {
+          const now = new Date();
+          const etaTime = new Date(nextActiveOrder.estimatedDeliveryTime);
+          const minutesUntilETA = Math.max(0, Math.floor((etaTime - now) / (1000 * 60)));
+          
+          if (minutesUntilETA <= 60) {
+            nextOrderETA = `${minutesUntilETA} min`;
+          } else {
+            const hours = Math.floor(minutesUntilETA / 60);
+            const minutes = minutesUntilETA % 60;
+            nextOrderETA = `${hours}h ${minutes}m`;
+          }
+        } else if (nextActiveOrder.status === 'ready' || nextActiveOrder.status === 'confirmed') {
+          // Order is ready, estimate 15-30 minutes
+          nextOrderETA = '15-30 min';
+        } else if (nextActiveOrder.status === 'picked_up') {
+          // Already picked up, estimate delivery time based on average
+          const avgDeliveryMinutes = avgDeliveryTime > 0 ? avgDeliveryTime : 30;
+          nextOrderETA = `${avgDeliveryMinutes} min`;
+        }
+      } else if (deliveryPerson.isOnline) {
+        // No active orders, but online - estimate when next order might come
+        // Based on average order frequency (this could be improved with historical data)
+        nextOrderETA = '10-20 min';
+      }
+    } catch (etaError) {
+      console.error('Error calculating next order ETA:', etaError);
+      // Continue without ETA
+    }
+    
+    // Get cash summary info for dashboard
+    let cashInfo = {
+      cashInHand: deliveryPerson.cashInHand || 0,
+      pendingCashSubmission: deliveryPerson.pendingCashSubmission || 0,
+      pendingCollectionsCount: 0
+    };
+    
+    try {
+      const CashCollection = (await import('../../models/Payment/CashCollection.js')).default;
+      const pendingCollections = await CashCollection.countDocuments({
+        deliveryPerson: deliveryPersonId,
+        submissionStatus: 'pending'
+      });
+      cashInfo.pendingCollectionsCount = pendingCollections;
+    } catch (error) {
+      console.error('Error fetching pending collections:', error);
+      // Continue with 0 if CashCollection model not available
+    }
     
     const dashboardData = {
       todayStats: {
@@ -747,7 +1026,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
         deliveries: todayDeliveries,
         onlineTime: onlineTime,
         hourlyEarnings: hourlyEarnings,
-        estimatedEarnings: todayEarnings + (hourlyEarnings * 2) // Estimate for remaining day
+        estimatedEarnings: Math.round(estimatedEarnings)
       },
       weeklyStats: {
         totalEarnings: weekEarnings,
@@ -755,6 +1034,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
         dailyBreakdown: dailyBreakdown
       },
       performance: {
+        completedDeliveries: totalDeliveries,
         completionRate: Math.round(completionRate * 100) / 100,
         averageDeliveryTime: Math.round(avgDeliveryTime),
         onTimeDeliveries: onTimeDeliveries,
@@ -763,6 +1043,9 @@ export const getDashboard = asyncHandler(async (req, res) => {
         fuelEfficiency: deliveryPerson.fuelEfficiency || 0
       },
       recentOrders: formattedRecentOrders,
+      activeOrders: activeOrdersCount,
+      nextOrderETA: nextOrderETA,
+      cashInfo: cashInfo,
       zoneInfo: {
         name: deliveryPerson.zone?.name || 'No Zone Assigned',
         description: deliveryPerson.zone?.description || '',

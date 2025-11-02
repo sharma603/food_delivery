@@ -1,4 +1,19 @@
+// ⚠️ DEPRECATED - NOT USED ⚠️
 // DeliveryPartner Model
+// 
+// WARNING: This model is NOT actively used in the system.
+// The system uses DeliveryPersonnel model for all delivery operations.
+// This model exists but has:
+//   - 0 controllers using it
+//   - 0 routes using it  
+//   - 0 active functionality
+//   - Empty MongoDB collection
+//
+// The system uses: DeliveryPersonnel (in models/DeliveryPersonnel.js)
+// All delivery operations use DeliveryPersonnel collection.
+//
+// This file can be safely deleted if not needed for future use.
+//
 // This file structure created as per requested organization
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';

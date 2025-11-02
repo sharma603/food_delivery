@@ -1,3 +1,18 @@
+// ✅ ACTIVE DELIVERY MODEL - IN USE ✅
+// DeliveryPersonnel Model
+// 
+// This is the PRIMARY and ACTIVE model for delivery operations.
+// All delivery functionality uses this collection:
+//   - Authentication: delivery/auth routes
+//   - Orders: mobile/delivery routes  
+//   - Cash Collection: delivery/cash routes
+//   - Analytics: Performance tracking
+//   - Accounting: Delivery records
+//
+// MongoDB Collection: "deliverypersonnels"
+// 
+// NOTE: Do NOT confuse with DeliveryPartner model (deprecated, not used)
+//
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
@@ -123,6 +138,27 @@ const deliveryPersonnelSchema = new mongoose.Schema({
     default: 0.1,
     min: [0, 'Commission rate cannot be negative'],
     max: [1, 'Commission rate cannot exceed 100%']
+  },
+  // Cash Collection Management
+  cashInHand: {
+    type: Number,
+    default: 0,
+    min: [0, 'Cash in hand cannot be negative']
+  },
+  totalCashCollected: {
+    type: Number,
+    default: 0,
+    min: [0, 'Total cash collected cannot be negative']
+  },
+  totalCashSubmitted: {
+    type: Number,
+    default: 0,
+    min: [0, 'Total cash submitted cannot be negative']
+  },
+  pendingCashSubmission: {
+    type: Number,
+    default: 0,
+    min: [0, 'Pending cash submission cannot be negative']
   },
   
   // Location and Tracking
@@ -375,14 +411,28 @@ deliveryPersonnelSchema.methods.updateLocation = async function(latitude, longit
 deliveryPersonnelSchema.methods.goOffline = async function() {
   // Calculate time spent online if was online
   if (this.isOnline && this.onlineAt) {
-    const onlineDuration = Math.floor((new Date() - this.onlineAt) / (1000 * 60)); // minutes
-    this.totalOnlineTime += onlineDuration;
-    this.todayOnlineTime += onlineDuration;
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const now = new Date();
+    
+    // Only count time from today (handle cross-day sessions)
+    if (new Date(this.onlineAt) >= startOfToday) {
+      // Normal case: onlineAt is from today
+      const onlineDuration = Math.floor((now - this.onlineAt) / (1000 * 60)); // minutes
+      this.totalOnlineTime += onlineDuration;
+      this.todayOnlineTime = (this.todayOnlineTime || 0) + onlineDuration;
+    } else {
+      // Edge case: onlineAt is from previous day, only count time from today
+      const onlineDuration = Math.floor((now - startOfToday) / (1000 * 60)); // minutes since midnight
+      this.totalOnlineTime += onlineDuration;
+      this.todayOnlineTime = onlineDuration; // Reset to today's time only
+    }
   }
   
   this.isOnline = false;
   this.status = 'off_duty';
   this.onlineAt = null;
+  this.lastLogout = new Date();
   this.lastActive = new Date();
   
   await this.save();
@@ -390,6 +440,24 @@ deliveryPersonnelSchema.methods.goOffline = async function() {
 
 // Instance method to go online
 deliveryPersonnelSchema.methods.goOnline = async function() {
+  // Reset todayOnlineTime if it's a new day
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  
+  // If the last onlineAt was from a previous day, reset today's online time
+  if (this.onlineAt && new Date(this.onlineAt) < startOfToday) {
+    this.todayOnlineTime = 0;
+  }
+  
+  // If todayOnlineTime exists but onlineAt doesn't or is from previous day, reset
+  // This handles edge cases where data might be inconsistent
+  if (!this.onlineAt || (this.onlineAt && new Date(this.onlineAt) < startOfToday)) {
+    // Also check if lastLogout exists and is from previous day
+    if (this.lastLogout && new Date(this.lastLogout) < startOfToday) {
+      this.todayOnlineTime = 0;
+    }
+  }
+  
   this.isOnline = true;
   this.status = 'on_duty';
   this.onlineAt = new Date();

@@ -47,57 +47,102 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config || {};
     const status = error.response?.status;
-    if (status !== 401) return Promise.reject(error);
+    const errorData = error.response?.data;
+    
+    // Handle token expiration and other 401 errors
+    if (status === 401) {
+      // Check if it's a token expiration error
+      const isTokenExpired = errorData?.error === 'TokenExpiredError' || 
+                            errorData?.message?.toLowerCase().includes('expired') ||
+                            error?.message?.toLowerCase().includes('expired');
 
-    // Do not try to refresh for auth endpoints
-    const url = originalRequest.url || '';
-    if (url.includes('/login') || url.includes('/refresh') || url.includes('/logout')) return Promise.reject(error);
+      // Do not try to refresh for auth endpoints
+      const url = originalRequest.url || '';
+      if (url.includes('/login') || url.includes('/refresh') || url.includes('/logout')) {
+        return Promise.reject(error);
+      }
 
-    // Queue requests while a refresh is in progress
-    if (!isRefreshing) {
-      isRefreshing = true;
-      refreshPromise = (async () => {
-        const storedRefresh = await AsyncStorage.getItem('delivery_refresh_token');
-        if (!storedRefresh) {
-          // Silently fail if no refresh token - user needs to login again
-          console.warn('No refresh token available, user needs to login');
-          return null;
+      // If token expired or invalid token, try to refresh
+      if (isTokenExpired || errorData?.error === 'JsonWebTokenError') {
+        // Queue requests while a refresh is in progress
+        if (!isRefreshing) {
+          isRefreshing = true;
+          refreshPromise = (async () => {
+            const storedRefresh = await AsyncStorage.getItem('delivery_refresh_token');
+            if (!storedRefresh) {
+              // Silently fail if no refresh token - user needs to login again
+              await AsyncStorage.removeItem('delivery_token');
+              return null;
+            }
+            try {
+              // Temporarily remove Authorization header to avoid using expired token
+              delete originalRequest.headers.Authorization;
+              
+              const resp = await api.post('/delivery/auth/refresh', { refreshToken: storedRefresh }, {
+                headers: {
+                  Authorization: undefined // Don't send expired token
+                }
+              });
+              
+              if (!resp.data?.success) throw new Error('Refresh failed');
+              const { accessToken, refreshToken: newRefresh } = resp.data.data;
+              
+              await AsyncStorage.setItem('delivery_token', accessToken);
+              await AsyncStorage.setItem('delivery_refresh_token', newRefresh);
+              api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+              
+              resolvePendingRequests(accessToken);
+              return accessToken;
+            } catch (refreshError: any) {
+              // Clear invalid tokens on refresh failure
+              await AsyncStorage.removeItem('delivery_token');
+              await AsyncStorage.removeItem('delivery_refresh_token');
+              delete api.defaults.headers.common['Authorization'];
+              
+              throw refreshError;
+            }
+          })()
+            .catch(async (e) => {
+              // Don't logout automatically - let the app handle authentication state
+              return null;
+            })
+            .finally(() => {
+              isRefreshing = false;
+            });
         }
-        const resp = await api.post('/delivery/auth/refresh', { refreshToken: storedRefresh });
-        if (!resp.data?.success) throw new Error('Refresh failed');
-        const { accessToken, refreshToken: newRefresh } = resp.data.data;
-        await AsyncStorage.setItem('delivery_token', accessToken);
-        await AsyncStorage.setItem('delivery_refresh_token', newRefresh);
-        api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-        resolvePendingRequests(accessToken);
-        return accessToken;
-      })()
-        .catch(async (e) => {
-          console.warn('Token refresh failed:', e);
-          // Don't logout automatically - let the app handle authentication state
-          return null;
-        })
-        .finally(() => {
-          isRefreshing = false;
-        });
+      } else {
+        // Other 401 errors - return as is
+        return Promise.reject(error);
+      }
+    } else {
+      // Non-401 errors - return as is
+      return Promise.reject(error);
     }
 
     return new Promise((resolve, reject) => {
       scheduleRequestRetry((token: string | null) => {
         if (!token) {
-          // No refresh token available, reject the request
-          reject(new Error('No refresh token available'));
+          // No refresh token available, reject the request with clear error
+          const errorMessage = errorData?.message || 'Authentication failed. Please login again.';
+          reject(new Error(errorMessage));
           return;
         }
         try {
+          // Update headers with new token and retry original request
           originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers.Authorization = `Bearer ${token}`;
+          // Reset the request to avoid retry flag issues
+          originalRequest._retry = true;
           resolve(api.request(originalRequest));
         } catch (e) {
           reject(e);
         }
       });
-      refreshPromise?.catch(reject);
+
+      refreshPromise?.catch((refreshErr) => {
+        // If refresh fails, reject with the original error or refresh error
+        reject(refreshErr || error);
+      });
     });
   }
 );
@@ -183,6 +228,35 @@ export const deliveryAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+
+  // Cash Collection
+  recordCashCollection: (orderId: string, amount: number, notes?: string) =>
+    api.post('/delivery/cash/collect', { orderId, amount, notes }),
+  submitCash: (amount?: number, collectionIds?: string[], notes?: string, depositProofUri?: string) => {
+    if (depositProofUri) {
+      // If deposit proof is provided, upload it first and then submit cash
+      const formData = new FormData();
+      const filename = depositProofUri.split('/').pop() || 'deposit_proof.jpg';
+      const ext = filename.split('.').pop()?.toLowerCase();
+      const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+      // @ts-ignore - React Native FormData file
+      formData.append('depositProof', { uri: depositProofUri, name: filename, type: mime });
+      formData.append('amount', amount?.toString() || '');
+      formData.append('notes', notes || '');
+      if (collectionIds && collectionIds.length > 0) {
+        formData.append('collectionIds', JSON.stringify(collectionIds));
+      }
+      return api.post('/delivery/cash/submit', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    } else {
+      // Regular JSON submission without proof
+      return api.post('/delivery/cash/submit', { amount, collectionIds, notes });
+    }
+  },
+  getCashSummary: () => api.get('/delivery/cash/summary'),
+  getCashHistory: (status?: string, page?: number, limit?: number) =>
+    api.get(`/delivery/cash/history?${status ? `status=${status}&` : ''}page=${page || 1}&limit=${limit || 50}`),
 };
 
 export default api;

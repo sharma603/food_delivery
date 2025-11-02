@@ -367,6 +367,51 @@ class SuperAdminApiService extends ApiService {
   async updateSystemSettings(settings) {
     return this.put('/system', settings);
   }
+
+  // SuperAdmin Cash Collection Management
+  async getDeliveryPersonnelCash(params = {}) {
+    const queryParams = new URLSearchParams();
+    Object.keys(params).forEach(key => {
+      if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+        queryParams.append(key, params[key]);
+      }
+    });
+    
+    const queryString = queryParams.toString();
+    const endpoint = `/cash/delivery-personnel${queryString ? `?${queryString}` : ''}`;
+    console.log('Calling endpoint:', endpoint);
+    const response = await this.get(endpoint);
+    console.log('Raw API response:', response);
+    return response;
+  }
+
+  async getPendingSubmissions(params = {}) {
+    const queryParams = new URLSearchParams();
+    Object.keys(params).forEach(key => {
+      if (params[key] !== undefined && params[key] !== null) {
+        queryParams.append(key, params[key]);
+      }
+    });
+    
+    const queryString = queryParams.toString();
+    return this.get(`/cash/pending${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async reconcileCash(collectionId, data) {
+    return this.post(`/cash/reconcile/${collectionId}`, data);
+  }
+
+  async getCashReport(params = {}) {
+    const queryParams = new URLSearchParams();
+    Object.keys(params).forEach(key => {
+      if (params[key] !== undefined && params[key] !== null) {
+        queryParams.append(key, params[key]);
+      }
+    });
+    
+    const queryString = queryParams.toString();
+    return this.get(`/cash/report${queryString ? `?${queryString}` : ''}`);
+  }
 }
 
 export const superadminApi = new SuperAdminApiService();

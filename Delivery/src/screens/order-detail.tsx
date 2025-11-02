@@ -9,6 +9,7 @@ import {
   Linking,
   Platform,
   Modal,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
@@ -16,6 +17,8 @@ import { deliveryAPI } from '../services/api';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { TextInput, Image } from 'react-native';
+import { useAuth } from '../context/AuthContext';
+import { getCustomerAddressFromOrder, formatAddress } from '../utils/addressHelper';
 
 interface OrderDetail {
   _id: string;
@@ -60,10 +63,19 @@ interface OrderDetail {
   specialInstructions?: string;
   pickedUpAt?: string;
   actualDeliveryTime?: string;
+  cashCollection?: {
+    amount: number;
+    collectedAt: string;
+    submissionStatus: 'pending' | 'submitted' | 'reconciled';
+  };
+  deliveryPerson?: string | { _id: string };
+  deliveryPersonnel?: string | { _id: string };
+  assignedDeliveryPerson?: string | { _id: string };
 }
 
 export default function OrderDetailScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,6 +85,9 @@ export default function OrderDetailScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resendAttempts, setResendAttempts] = useState(0);
+  const [showCashCollectionModal, setShowCashCollectionModal] = useState(false);
+  const [cashAmount, setCashAmount] = useState('');
+  const [cashNotes, setCashNotes] = useState('');
 
   useEffect(() => {
     loadOrderDetails();
@@ -173,7 +188,7 @@ export default function OrderDetailScreen() {
           if (isCashOnDelivery) {
             Alert.alert(
               '✅ Order Delivered & Payment Received',
-              `You collected Rs. ${orderAmount.toFixed(2)} in cash from customer.\n\n💰 Delivery Fee Earned: Rs. ${deliveryFee.toFixed(2)}\n✅ Payment status updated to Paid\n📊 Earnings updated in dashboard`,
+              `You collected Rs. ${orderAmount.toFixed(2)} in cash from customer.\n\n💰 Cash added to Cash in Hand: Rs. ${orderAmount.toFixed(2)}\n💰 Delivery Fee Earned: Rs. ${deliveryFee.toFixed(2)}\n✅ Cash collection automatically recorded\n📊 Check your dashboard for updated cash balance`,
               [
                 {
                   text: 'View Dashboard',
@@ -189,7 +204,11 @@ export default function OrderDetailScreen() {
                 },
                 {
                   text: 'OK',
-                  style: 'cancel'
+                  style: 'cancel',
+                  onPress: () => {
+                    // Reload order data to reflect cash collection
+                    loadOrderDetails();
+                  }
                 }
               ]
             );
@@ -261,28 +280,42 @@ export default function OrderDetailScreen() {
     );
   }
 
-  const formatAddress = (addr: any) => {
-    if (!addr) return '';
-    if (typeof addr === 'string') return addr;
-    const parts = [addr.street, addr.city, addr.state, addr.zipCode].filter(Boolean);
-    return parts.join(', ');
-  };
 
   const restaurantCoords = order.restaurant?.coordinates;
   const customerCoords = order.deliveryAddress?.coordinates;
   const hasRestaurantCoords = !!(restaurantCoords && typeof restaurantCoords.latitude === 'number' && typeof restaurantCoords.longitude === 'number');
   const hasCustomerCoords = !!(customerCoords && typeof customerCoords.latitude === 'number' && typeof customerCoords.longitude === 'number');
 
+  // Check if order is assigned to current delivery person
+  const orderDeliveryPersonId = 
+    order.deliveryPerson?.toString() || 
+    (typeof order.deliveryPerson === 'object' && order.deliveryPerson?._id?.toString()) ||
+    order.deliveryPersonnel?.toString() || 
+    (typeof order.deliveryPersonnel === 'object' && order.deliveryPersonnel?._id?.toString()) ||
+    order.assignedDeliveryPerson?.toString() || 
+    (typeof order.assignedDeliveryPerson === 'object' && order.assignedDeliveryPerson?._id?.toString());
+  
+  const currentUserId = user?._id?.toString();
+  const isOrderAssignedToMe = orderDeliveryPersonId && currentUserId && orderDeliveryPersonId === currentUserId;
+
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#12151C" />
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+        >
           <Ionicons name="arrow-back" size={24} color="#EDEFF5" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order #{order.orderNumber}</Text>
-        <View style={{ width: 24 }} />
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Order #{order.orderNumber}</Text>
+        </View>
+        <View style={{ width: 40 }} />
       </View>
+      <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
       {/* Map Section (only if we have coordinates) */}
       {(hasRestaurantCoords || hasCustomerCoords) && (
@@ -411,7 +444,7 @@ export default function OrderDetailScreen() {
           <Ionicons name="location" size={20} color="#98A2B3" />
           <View style={styles.detailContent}>
             <Text style={styles.detailLabel}>Delivery Address</Text>
-            <Text style={styles.detailValue}>{formatAddress(order.deliveryAddress)}</Text>
+            <Text style={styles.detailValue}>{getCustomerAddressFromOrder(order)}</Text>
           </View>
         </View>
       </View>
@@ -441,32 +474,90 @@ export default function OrderDetailScreen() {
           <Text style={styles.totalLabel}>Total</Text>
           <Text style={styles.totalValue}>Rs {order.pricing.total}</Text>
         </View>
-        {order.paymentMethod === 'cash_on_delivery' && (
-          <View style={[styles.priceRow, { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#252B36' }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Ionicons name="cash" size={18} color="#FFD700" />
-              <Text style={[styles.priceLabel, { fontWeight: '600' }]}>Payment Method: Cash on Delivery</Text>
-            </View>
-            <Text style={[styles.priceValue, { color: order.paymentStatus === 'paid' ? '#4ECDC4' : '#FFD700', fontWeight: 'bold' }]}>
-              {order.paymentStatus === 'paid' ? 'Paid ✓' : 'Collect: Rs ' + order.pricing.total.toFixed(2)}
+        
+        {/* Payment Information Section */}
+        <View style={[styles.paymentSection, { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#252B36' }]}>
+          <View style={styles.paymentHeader}>
+            <Ionicons 
+              name={order.paymentMethod === 'cash_on_delivery' ? 'cash' : 'card'} 
+              size={20} 
+              color={order.paymentMethod === 'cash_on_delivery' ? '#FFD700' : '#4ECDC4'} 
+            />
+            <Text style={styles.paymentTitle}>
+              {order.paymentMethod === 'cash_on_delivery' ? 'Cash on Delivery' : 'Online Payment'}
             </Text>
           </View>
-        )}
-        {order.paymentStatus === 'paid' && order.paymentMethod === 'cash_on_delivery' && (
-          <View style={[styles.priceRow, { marginTop: 8, padding: 12, backgroundColor: '#1A3D2E', borderRadius: 8 }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Ionicons name="checkmark-circle" size={20} color="#4ECDC4" />
-              <Text style={[styles.priceLabel, { color: '#4ECDC4', fontWeight: '600' }]}>
-                Payment Received: Rs {order.pricing.total.toFixed(2)}
-              </Text>
+          
+          {order.paymentMethod === 'cash_on_delivery' ? (
+            <>
+              {order.paymentStatus === 'paid' ? (
+                <View style={styles.paymentPaidCard}>
+                  <View style={styles.paymentStatusRow}>
+                    <Ionicons name="checkmark-circle" size={24} color="#4ECDC4" />
+                    <View style={styles.paymentStatusInfo}>
+                      <Text style={styles.paymentStatusText}>Payment Received</Text>
+                      <Text style={styles.paymentAmountText}>Rs {order.pricing.total.toFixed(2)}</Text>
+                    </View>
+                  </View>
+                  {order.cashCollection && (
+                    <View style={styles.cashCollectionInfo}>
+                      <Text style={styles.cashCollectionLabel}>
+                        Collection Status: 
+                        <Text style={[styles.cashCollectionStatus, {
+                          color: order.cashCollection.submissionStatus === 'reconciled' ? '#4ECDC4' :
+                                 order.cashCollection.submissionStatus === 'submitted' ? '#FFD700' : '#FFE66D'
+                        }]}>
+                          {' '}{order.cashCollection.submissionStatus === 'reconciled' ? '✓ Reconciled' :
+                                 order.cashCollection.submissionStatus === 'submitted' ? '○ Submitted' : 'Pending Submission'}
+                        </Text>
+                      </Text>
+                      <Text style={styles.cashCollectionDate}>
+                        Collected: {new Date(order.cashCollection.collectedAt).toLocaleString()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <View style={styles.paymentPendingCard}>
+                  <View style={styles.paymentStatusRow}>
+                    <Ionicons name="alert-circle" size={24} color="#FFD700" />
+                    <View style={styles.paymentStatusInfo}>
+                      <Text style={styles.paymentPendingText}>Collect from Customer</Text>
+                      <Text style={styles.paymentAmountText}>Rs {order.pricing.total.toFixed(2)}</Text>
+                    </View>
+                  </View>
+                  {order.status === 'delivered' && (
+                    <TouchableOpacity 
+                      style={styles.recordCashButton}
+                      onPress={() => setShowCashCollectionModal(true)}
+                    >
+                      <Ionicons name="cash" size={18} color="#fff" />
+                      <Text style={styles.recordCashButtonText}>Record Cash Collection</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </>
+          ) : (
+            <View style={styles.paymentPaidCard}>
+              <View style={styles.paymentStatusRow}>
+                <Ionicons name="checkmark-circle" size={24} color="#4ECDC4" />
+                <View style={styles.paymentStatusInfo}>
+                  <Text style={styles.paymentStatusText}>
+                    {order.paymentStatus === 'paid' ? 'Payment Completed' : 'Payment Pending'}
+                  </Text>
+                  <Text style={styles.paymentMethodText}>Customer paid online</Text>
+                </View>
+              </View>
             </View>
-          </View>
-        )}
+          )}
+        </View>
       </View>
 
       {/* Action Buttons */}
       <View style={styles.actionSection}>
-        {(order.status === 'ready' || order.status === 'confirmed') && (
+        {/* Only show "Mark as Picked Up" button if order is assigned to current user */}
+        {(order.status === 'ready' || order.status === 'confirmed') && isOrderAssignedToMe && (
           <TouchableOpacity
             style={[styles.actionButton, styles.pickupButton]}
             onPress={() => handleUpdateStatus('picked_up')}
@@ -479,7 +570,20 @@ export default function OrderDetailScreen() {
           </TouchableOpacity>
         )}
         
-        {order.status === 'picked_up' && (
+        {/* Show message if order is not assigned to current user */}
+        {(order.status === 'ready' || order.status === 'confirmed') && !isOrderAssignedToMe && (
+          <View style={styles.infoCard}>
+            <Ionicons name="information-circle" size={20} color="#FFE66D" />
+            <Text style={styles.infoText}>
+              {orderDeliveryPersonId 
+                ? 'This order is assigned to another delivery person. Please accept the order first.'
+                : 'Please accept this order before you can mark it as picked up.'}
+            </Text>
+          </View>
+        )}
+        
+        {/* Only show "Mark as Delivered" if order is assigned to current user */}
+        {order.status === 'picked_up' && isOrderAssignedToMe && (
           <TouchableOpacity
             style={[styles.actionButton, styles.deliveryButton]}
             onPress={() => setOtpModalVisible(true)}
@@ -489,8 +593,8 @@ export default function OrderDetailScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Proof controls */}
-        {(order.status === 'ready' || order.status === 'confirmed' || order.status === 'picked_up') && (
+        {/* Proof controls - Only show if order is assigned to current user */}
+        {(order.status === 'ready' || order.status === 'confirmed' || order.status === 'picked_up') && isOrderAssignedToMe && (
           <TouchableOpacity style={[styles.actionButton, styles.proofButton]} onPress={pickProofPhoto}>
             <Ionicons name="camera" size={20} color="#fff" />
             <Text style={styles.actionButtonText}>Add Photo Proof</Text>
@@ -504,6 +608,81 @@ export default function OrderDetailScreen() {
           </ScrollView>
         )}
       </View>
+
+      {/* Cash Collection Modal */}
+      <Modal visible={showCashCollectionModal} animationType="slide" transparent onRequestClose={() => setShowCashCollectionModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Record Cash Collection</Text>
+            <Text style={styles.modalSubtitle}>Enter the amount collected from customer</Text>
+            
+            <View style={styles.amountInputContainer}>
+              <Text style={styles.inputLabel}>Amount Collected</Text>
+              <TextInput 
+                placeholder={`Rs ${order.pricing.total.toFixed(2)}`}
+                keyboardType="decimal-pad"
+                value={cashAmount}
+                onChangeText={setCashAmount}
+                style={styles.amountInput}
+                placeholderTextColor="#999"
+              />
+              <Text style={styles.expectedAmount}>
+                Expected: Rs {order.pricing.total.toFixed(2)}
+              </Text>
+            </View>
+
+            <View style={styles.notesContainer}>
+              <Text style={styles.inputLabel}>Notes (Optional)</Text>
+              <TextInput 
+                placeholder="Add any notes about the payment..."
+                value={cashNotes}
+                onChangeText={setCashNotes}
+                style={styles.notesInput}
+                multiline
+                numberOfLines={3}
+                placeholderTextColor="#999"
+              />
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
+              <TouchableOpacity 
+                style={[styles.modalBtn, { backgroundColor: '#E5E5E5' }]} 
+                onPress={() => {
+                  setShowCashCollectionModal(false);
+                  setCashAmount('');
+                  setCashNotes('');
+                }}
+              >
+                <Text style={{ color: '#333', fontWeight: '600' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                disabled={submitting || !cashAmount} 
+                style={[styles.modalBtn, { backgroundColor: '#FF6B35', opacity: submitting || !cashAmount ? 0.7 : 1 }]} 
+                onPress={async () => {
+                  try {
+                    setSubmitting(true);
+                    const amount = parseFloat(cashAmount) || order.pricing.total;
+                    await deliveryAPI.recordCashCollection(order._id, amount, cashNotes);
+                    Alert.alert('Success', 'Cash collection recorded successfully');
+                    setShowCashCollectionModal(false);
+                    setCashAmount('');
+                    setCashNotes('');
+                    loadOrderDetails();
+                  } catch (error: any) {
+                    Alert.alert('Error', error?.response?.data?.message || 'Failed to record cash collection');
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '600' }}>
+                  {submitting ? 'Recording...' : 'Record Collection'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* OTP Modal */}
       <Modal visible={otpModalVisible} animationType="slide" transparent onRequestClose={() => setOtpModalVisible(false)}>
@@ -538,7 +717,8 @@ export default function OrderDetailScreen() {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -558,19 +738,41 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0F1115',
   },
+  scrollContent: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    paddingTop: Platform.OS === 'ios' ? 50 : 12,
     backgroundColor: '#12151C',
     borderBottomWidth: 1,
     borderBottomColor: '#1F2430',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 1000,
+  },
+  backButton: {
+    padding: 8,
+    marginLeft: -8,
+    borderRadius: 8,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 16,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#EDEFF5',
+    textAlign: 'center',
   },
   mapContainer: {
     backgroundColor: '#1A1D24',
@@ -769,6 +971,157 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     marginHorizontal: 6,
+  },
+  paymentSection: {
+    marginTop: 16,
+  },
+  paymentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  paymentTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#EDEFF5',
+  },
+  paymentPaidCard: {
+    backgroundColor: '#1A3D2E',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2A5D4E',
+  },
+  paymentPendingCard: {
+    backgroundColor: '#3D2E1A',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#5D4E2A',
+  },
+  paymentStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  paymentStatusInfo: {
+    flex: 1,
+  },
+  paymentStatusText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4ECDC4',
+    marginBottom: 4,
+  },
+  paymentPendingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFD700',
+    marginBottom: 4,
+  },
+  paymentAmountText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#EDEFF5',
+  },
+  paymentMethodText: {
+    fontSize: 14,
+    color: '#98A2B3',
+    marginTop: 2,
+  },
+  cashCollectionInfo: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#2A5D4E',
+  },
+  cashCollectionLabel: {
+    fontSize: 12,
+    color: '#98A2B3',
+    marginBottom: 4,
+  },
+  cashCollectionStatus: {
+    fontWeight: '600',
+  },
+  cashCollectionDate: {
+    fontSize: 12,
+    color: '#98A2B3',
+    fontStyle: 'italic',
+  },
+  recordCashButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF6B35',
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
+  },
+  recordCashButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  amountInputContainer: {
+    marginTop: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 8,
+  },
+  amountInput: {
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  expectedAmount: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  notesContainer: {
+    marginTop: 16,
+  },
+  notesInput: {
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: '#333',
+    textAlignVertical: 'top',
+    minHeight: 80,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2A2E36',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#3A3F4B',
+    gap: 12,
+    marginBottom: 12,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#98A2B3',
+    lineHeight: 20,
   },
 });
 

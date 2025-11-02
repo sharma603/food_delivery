@@ -348,6 +348,15 @@ export const createMobileOrder = async (req, res) => {
       });
     } catch (emailError) {
       // Don't fail the order creation if email fails
+      console.error('Error sending order confirmation email:', emailError);
+    }
+
+    // Notify delivery partners about new order
+    try {
+      await notifyDeliveryPartners(populatedOrder, 'new_order');
+    } catch (notificationError) {
+      console.error('Error notifying delivery partners about new order:', notificationError);
+      // Don't fail the order creation if notification fails
     }
 
     res.status(201).json({

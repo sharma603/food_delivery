@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { deliveryAPI } from '../services/api';
+import { getCustomerAddressFromOrder } from '../utils/addressHelper';
 import { useRouter } from 'expo-router';
 import { useLocalSearchParams } from 'expo-router';
 import { notificationService } from '../services/notificationService';
@@ -34,6 +35,7 @@ interface Order {
   deliveryCharge: number;
   totalAmount: number;
   paymentMethod: string;
+  paymentStatus?: 'pending' | 'paid' | 'failed' | 'refunded';
   specialInstructions?: string;
   distance: number;
   estimatedTimeRemaining?: number;
@@ -56,6 +58,13 @@ export default function OrdersScreen() {
   const isLoadingRef = useRef(false);
   const lastRefreshRef = useRef(0);
 
+  // Handle navigation to available tab when coming from notification
+  useEffect(() => {
+    if (params?.tab === 'available') {
+      setActiveTab('available');
+    }
+  }, [params?.tab, isAuthenticated, token, user]);
+
   useEffect(() => {
     // Wait for authentication to load
     if (authLoading) return;
@@ -69,27 +78,38 @@ export default function OrdersScreen() {
 
     // Load orders once authenticated
     loadOrders();
-    // Subscribe to instant order ready notifications
-    const offReady = socketService.on('order:ready', async (payload: any) => {
+    // Subscribe to instant order notifications (backend sends 'order:notification')
+    const offNotification = socketService.on('order:notification', async (payload: any) => {
       try {
+        console.log('📦 Received order notification:', payload);
+        
+        // Show local notification
         await notificationService.scheduleLocalNotification(
-          payload?.title || 'New Order Ready',
-          payload?.message || 'An order is ready for pickup',
-          { type: 'new_order', orderId: payload?.order?._id },
+          payload?.title || 'New Order Available',
+          payload?.message || 'An order is available for delivery',
+          { 
+            type: payload?.type || 'new_order', 
+            orderId: payload?.order?._id,
+            notificationData: payload
+          },
           0
         );
-      } catch {}
-      // Auto refresh available list when on that tab (throttled)
-      if (activeTab === 'available') {
-        const now = Date.now();
-        if (now - lastRefreshRef.current > 3000 && !isLoadingRef.current) {
-          loadOrders();
+        
+        // Auto refresh available list when on that tab (throttled)
+        if (activeTab === 'available') {
+          const now = Date.now();
+          if (now - lastRefreshRef.current > 3000 && !isLoadingRef.current) {
+            lastRefreshRef.current = now;
+            loadOrders();
+          }
         }
+      } catch (error) {
+        console.error('Error handling order notification:', error);
       }
     });
     return () => {
       // Clean up the socket listener when tab changes/unmounts
-      offReady && offReady();
+      offNotification && offNotification();
     };
   }, [activeTab, isAuthenticated, token, user, authLoading]);
 
@@ -141,9 +161,7 @@ export default function OrdersScreen() {
             orderId: o.orderNumber || o._id,
             customerName: o.customer?.name || 'Customer',
             customerPhone: o.customer?.phone || '',
-            customerAddress: typeof o.deliveryAddress === 'string' ? o.deliveryAddress : (
-              o.deliveryAddress?.street || ''
-            ),
+            customerAddress: getCustomerAddressFromOrder(o),
             restaurantName: o.restaurant?.restaurantName || 'Restaurant',
             restaurantAddress: o.restaurant?.address || '',
             status: (o.status || 'pending') as Order['status'],
@@ -173,9 +191,7 @@ export default function OrdersScreen() {
             orderId: o.orderNumber || o._id,
             customerName: o.customer?.name || 'Customer',
             customerPhone: o.customer?.phone || '',
-            customerAddress: typeof o.deliveryAddress === 'string' ? o.deliveryAddress : (
-              o.deliveryAddress?.street || ''
-            ),
+            customerAddress: getCustomerAddressFromOrder(o),
             restaurantName: o.restaurant?.restaurantName || 'Restaurant',
             restaurantAddress: o.restaurant?.address || '',
             status: (o.status || 'pending') as Order['status'],
@@ -369,8 +385,32 @@ export default function OrdersScreen() {
     >
       <View style={styles.orderHeader}>
         <Text style={styles.orderId}>#{order.orderId}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
-          <Text style={styles.statusText}>{getStatusText(order.status)}</Text>
+        <View style={styles.headerBadges}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
+            <Text style={styles.statusText}>{getStatusText(order.status)}</Text>
+          </View>
+          {/* Payment Status Badge */}
+          {order.paymentMethod && (
+            <View style={[
+              styles.paymentBadge, 
+              { 
+                backgroundColor: order.paymentMethod === 'cash_on_delivery' 
+                  ? (order.paymentStatus === 'paid' ? '#4ECDC4' : '#FFD700')
+                  : '#4ECDC4'
+              }
+            ]}>
+              <Ionicons 
+                name={order.paymentMethod === 'cash_on_delivery' ? 'cash' : 'card'} 
+                size={12} 
+                color="#fff" 
+              />
+              <Text style={styles.paymentBadgeText}>
+                {order.paymentMethod === 'cash_on_delivery' 
+                  ? (order.paymentStatus === 'paid' ? 'Paid' : 'COD')
+                  : 'Paid'}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -391,7 +431,15 @@ export default function OrdersScreen() {
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="cash-outline" size={16} color="#666" />
-          <Text style={styles.infoText}>{`Rs. ${Number(order.totalAmount ?? 0)}`}</Text>
+          <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={styles.infoText}>{`Rs. ${Number(order.totalAmount ?? 0)}`}</Text>
+            {order.paymentMethod === 'cash_on_delivery' && order.paymentStatus !== 'paid' && (
+              <View style={styles.codIndicator}>
+                <Ionicons name="alert-circle" size={14} color="#FFD700" />
+                <Text style={styles.codText}>Collect Cash</Text>
+              </View>
+            )}
+          </View>
         </View>
         {order.distance && (
           <View style={styles.infoRow}>
@@ -446,6 +494,25 @@ export default function OrdersScreen() {
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Total Amount:</Text>
                 <Text style={styles.detailValue}>Rs. {selectedOrder.totalAmount}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Payment Method:</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons 
+                    name={selectedOrder.paymentMethod === 'cash_on_delivery' ? 'cash' : 'card'} 
+                    size={16} 
+                    color={selectedOrder.paymentMethod === 'cash_on_delivery' ? '#FFD700' : '#4ECDC4'} 
+                  />
+                  <Text style={[styles.detailValue, {
+                    color: selectedOrder.paymentMethod === 'cash_on_delivery' 
+                      ? (selectedOrder.paymentStatus === 'paid' ? '#4ECDC4' : '#FFD700')
+                      : '#4ECDC4'
+                  }]}>
+                    {selectedOrder.paymentMethod === 'cash_on_delivery' 
+                      ? `Cash on Delivery ${selectedOrder.paymentStatus === 'paid' ? '(Paid ✓)' : '(Collect)'}`
+                      : 'Online Payment (Paid)'}
+                  </Text>
+                </View>
               </View>
             </View>
 
@@ -680,6 +747,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
+  headerBadges: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+  },
   statusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 4,
@@ -689,6 +761,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: '#fff',
+  },
+  paymentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  paymentBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  codIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E1',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  codText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFD700',
   },
   orderInfo: {
     marginBottom: 12,

@@ -66,6 +66,7 @@ import {
   LiveTracking,
   PerformanceAnalytics
 } from '../components/superadmin/delivery';
+import CashCollectionManagement from '../components/superadmin/delivery/CashCollectionManagement';
 
 const SuperAdminRoutes = () => {
   const { user, logout } = useAuth();
@@ -297,6 +298,14 @@ const SuperAdminRoutes = () => {
         <ProtectedRoute allowedRoles={['super_admin']}>
           <SuperAdminLayout user={user} onLogout={logout}>
             <PerformanceAnalytics user={user} onLogout={logout} />
+          </SuperAdminLayout>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/delivery/cash-collections" element={
+        <ProtectedRoute allowedRoles={['super_admin']}>
+          <SuperAdminLayout user={user} onLogout={logout}>
+            <CashCollectionManagement user={user} onLogout={logout} />
           </SuperAdminLayout>
         </ProtectedRoute>
       } />

@@ -246,6 +246,30 @@ const deliverySchema = new mongoose.Schema({
     maxlength: [500, 'Special instructions cannot exceed 500 characters']
   },
   
+  // Cash Collection Information (for COD orders)
+  cashCollected: {
+    amount: {
+      type: Number,
+      min: [0, 'Cash amount cannot be negative']
+    },
+    collectedAt: {
+      type: Date
+    },
+    collectedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'DeliveryPersonnel'
+    },
+    status: {
+      type: String,
+      enum: ['collected', 'pending', 'submitted', 'reconciled'],
+      default: 'collected'
+    },
+    cashCollectionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'CashCollection'
+    }
+  },
+  
   // Delay Information
   isDelayed: {
     type: Boolean,

@@ -11,9 +11,11 @@ import { TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { deliveryAPI } from '../services/api';
+import { useRouter } from 'expo-router';
 // notificationService not needed in profile-only view
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { user, updateUser } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -79,7 +81,7 @@ export default function ProfileScreen() {
         )}
       </TouchableOpacity>
       <Text style={styles.name}>{user?.name || 'Delivery Partner'}</Text>
-      <Text style={styles.email}>{user?.email || 'email@example.com'}</Text>
+      <Text style={styles.email}>{user?.email || ''}</Text>
       <Text style={styles.employeeId}>ID: {user?.employeeId || 'N/A'}</Text>
       
       <View style={styles.statusContainer}>
@@ -116,6 +118,7 @@ export default function ProfileScreen() {
       </View>
     </View>
   );
+
 
   const renderVehicleInfo = () => (
     <View style={styles.infoSection}>

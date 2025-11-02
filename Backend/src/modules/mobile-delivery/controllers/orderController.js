@@ -142,7 +142,7 @@ export const getDeliveryOrderDetail = async (req, res) => {
       })
       .populate({
         path: 'restaurant',
-        select: 'restaurantName ownerName phone address description'
+        select: 'restaurantName ownerName phone address description coordinates'
       })
       .select('-paymentId')
       .lean();
@@ -164,9 +164,33 @@ export const getDeliveryOrderDetail = async (req, res) => {
       });
     }
 
+    // Get cash collection info if exists
+    let cashCollection = null;
+    if (order.paymentMethod === 'cash_on_delivery') {
+      try {
+        const CashCollection = (await import('../../../models/Payment/CashCollection.js')).default;
+        const collection = await CashCollection.findOne({ order: id })
+          .select('amount collectedAt submissionStatus')
+          .lean();
+        if (collection) {
+          cashCollection = {
+            amount: collection.amount,
+            collectedAt: collection.collectedAt,
+            submissionStatus: collection.submissionStatus
+          };
+        }
+      } catch (error) {
+        console.error('Error fetching cash collection:', error);
+        // Continue without cash collection info
+      }
+    }
+
     res.status(200).json({
       success: true,
-      data: order
+      data: {
+        ...order,
+        cashCollection
+      }
     });
   } catch (error) {
     console.error('Error fetching order details:', error);
@@ -277,7 +301,13 @@ export const updateDeliveryStatus = async (req, res) => {
       .populate('restaurant', 'restaurantName');
 
     // If order is delivered, update delivery person's earnings and delivery count
-    if (status === 'delivered' && order.deliveryPerson) {
+    // Check if order is assigned to this delivery person using any of the possible fields
+    const isAssignedToDeliverer = 
+      order.deliveryPerson?.toString() === deliveryPersonId.toString() ||
+      order.deliveryPersonnel?.toString() === deliveryPersonId.toString() ||
+      order.assignedDeliveryPerson?.toString() === deliveryPersonId.toString();
+    
+    if (status === 'delivered' && isAssignedToDeliverer) {
       try {
         const deliveryPerson = await DeliveryPersonnel.findById(deliveryPersonId);
         if (deliveryPerson) {
@@ -291,6 +321,84 @@ export const updateDeliveryStatus = async (req, res) => {
           await deliveryPerson.save();
           
           console.log(`Updated delivery person ${deliveryPerson.name} earnings: +Rs. ${deliveryFee}, Total: Rs. ${deliveryPerson.totalEarnings}`);
+        }
+        
+        // If COD order, automatically record cash collection in database with proper accounting
+        if (order.paymentMethod === 'cash_on_delivery') {
+          try {
+            // Import models using correct relative paths from mobile-delivery module
+            // Path: Backend/src/modules/mobile-delivery/controllers -> Backend/src/models/Payment
+            const CashCollection = (await import('../../models/Payment/CashCollection.js')).default;
+            
+            // Check if cash collection already exists for this order
+            const existingCollection = await CashCollection.findOne({ order: req.params.id });
+            
+            if (!existingCollection) {
+              // Calculate the cash amount to collect (order total, not just delivery fee)
+              const cashAmount = updatedOrder.pricing?.total || order.pricing?.total || order.total || 0;
+              
+              if (cashAmount > 0) {
+                // Use MongoDB session for atomic transaction to ensure data consistency
+                const session = await mongoose.startSession();
+                session.startTransaction();
+                
+                try {
+                  // Create cash collection record in database
+                  const cashCollection = await CashCollection.create([{
+                    deliveryPerson: deliveryPersonId,
+                    order: req.params.id,
+                    orderNumber: updatedOrder.orderNumber || order.orderNumber,
+                    amount: cashAmount,
+                    collectedAt: new Date(),
+                    notes: `Auto-recorded on delivery - Order #${updatedOrder.orderNumber || order.orderNumber}`,
+                    submissionStatus: 'pending'
+                  }], { session });
+                  
+                  // Update delivery person's cash tracking atomically
+                  const deliveryPersonForCash = await DeliveryPersonnel.findById(deliveryPersonId).session(session);
+                  if (deliveryPersonForCash) {
+                    deliveryPersonForCash.cashInHand = (deliveryPersonForCash.cashInHand || 0) + cashAmount;
+                    deliveryPersonForCash.totalCashCollected = (deliveryPersonForCash.totalCashCollected || 0) + cashAmount;
+                    deliveryPersonForCash.pendingCashSubmission = (deliveryPersonForCash.pendingCashSubmission || 0) + cashAmount;
+                    await deliveryPersonForCash.save({ session });
+                    
+                    // Commit transaction - both records saved atomically
+                    await session.commitTransaction();
+                    session.endSession();
+                    
+                    console.log(`✅ Database Record Created:`);
+                    console.log(`   - CashCollection ID: ${cashCollection[0]._id}`);
+                    console.log(`   - Delivery Person: ${deliveryPersonForCash.name} (ID: ${deliveryPersonId})`);
+                    console.log(`   - Order: ${updatedOrder.orderNumber || order.orderNumber} (ID: ${req.params.id})`);
+                    console.log(`   - Amount Collected: Rs. ${cashAmount.toFixed(2)}`);
+                    console.log(`   - Cash in Hand: Rs. ${deliveryPersonForCash.cashInHand.toFixed(2)}`);
+                    console.log(`   - Total Collected (All Time): Rs. ${deliveryPersonForCash.totalCashCollected.toFixed(2)}`);
+                    console.log(`   - Pending Submission: Rs. ${deliveryPersonForCash.pendingCashSubmission.toFixed(2)}`);
+                    console.log(`   - Record Status: ${cashCollection[0].submissionStatus}`);
+                    console.log(`   - Recorded At: ${cashCollection[0].collectedAt}`);
+                  } else {
+                    await session.abortTransaction();
+                    session.endSession();
+                    throw new Error('Delivery person not found for cash collection');
+                  }
+                } catch (transactionError) {
+                  // Rollback transaction on error
+                  await session.abortTransaction();
+                  session.endSession();
+                  throw transactionError;
+                }
+              }
+            } else {
+              console.log(`⚠️ Cash collection already exists for order ${updatedOrder.orderNumber || order.orderNumber}`);
+            }
+          } catch (cashError) {
+            // Log error but don't fail the order update
+            console.error('❌ Error auto-recording cash collection in database:', cashError);
+            console.error('Cash error details:', cashError.message);
+            if (cashError.stack) {
+              console.error('Stack trace:', cashError.stack);
+            }
+          }
         }
       } catch (earningsError) {
         // Log error but don't fail the order update

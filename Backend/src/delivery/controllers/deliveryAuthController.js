@@ -41,13 +41,8 @@ export const deliveryLogin = asyncHandler(async (req, res) => {
     });
   }
 
-  // Check if account is active or on duty
-  if (!['active', 'on_duty'].includes(deliveryPerson.status)) {
-    return res.status(401).json({
-      success: false,
-      message: `Account is ${deliveryPerson.status}. Please contact administrator to activate your account.`
-    });
-  }
+  // Note: All delivery personnel can login regardless of status
+  // Status restrictions are handled at route/feature level, not at login level
 
   // Verify password field exists
   if (!deliveryPerson.password) {
@@ -155,12 +150,7 @@ export const refreshDeliveryToken = asyncHandler(async (req, res) => {
       });
     }
 
-    if (deliveryPerson.status !== 'active') {
-      return res.status(400).json({
-        success: false,
-        message: 'Account is not active'
-      });
-    }
+    // Note: All delivery personnel can refresh tokens regardless of status
 
     // Generate new tokens
     const accessToken = tokenService.signAccessToken({
@@ -316,9 +306,22 @@ export const deliveryLogout = asyncHandler(async (req, res) => {
 
   // Calculate online time if currently online
   if (deliveryPerson.isOnline && deliveryPerson.onlineAt) {
-    const onlineDuration = Math.floor((new Date() - deliveryPerson.onlineAt) / (1000 * 60)); // minutes
-    deliveryPerson.totalOnlineTime += onlineDuration;
-    deliveryPerson.todayOnlineTime += onlineDuration;
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const now = new Date();
+    
+    // Only count time from today (handle cross-day sessions)
+    if (new Date(deliveryPerson.onlineAt) >= startOfToday) {
+      // Normal case: onlineAt is from today
+      const onlineDuration = Math.floor((now - deliveryPerson.onlineAt) / (1000 * 60)); // minutes
+      deliveryPerson.totalOnlineTime += onlineDuration;
+      deliveryPerson.todayOnlineTime = (deliveryPerson.todayOnlineTime || 0) + onlineDuration;
+    } else {
+      // Edge case: onlineAt is from previous day, only count time from today
+      const onlineDuration = Math.floor((now - startOfToday) / (1000 * 60)); // minutes since midnight
+      deliveryPerson.totalOnlineTime += onlineDuration;
+      deliveryPerson.todayOnlineTime = onlineDuration; // Reset to today's time only
+    }
   }
 
   // Update logout information

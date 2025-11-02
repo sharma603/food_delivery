@@ -1,6 +1,7 @@
 import app from './src/app.js';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
+import { initSocket } from './src/config/socket.js';
 
 // Load environment variables
 dotenv.config();
@@ -20,6 +21,15 @@ const server = app.listen(PORT, () => {
   if (process.env.MONGODB_URI) {
     const mongoInfo = process.env.MONGODB_URI.replace(/\/\/.*@/, '//***:***@');
     console.log(`💾 MongoDB: ${mongoInfo.split('/').pop()?.split('?')[0] || 'Connected'}`);
+  }
+  
+  // Initialize Socket.IO for real-time notifications
+  try {
+    initSocket(server);
+    console.log(`📡 Socket.IO initialized - Real-time notifications enabled`);
+  } catch (socketError) {
+    console.error('⚠️  Socket.IO initialization failed:', socketError.message);
+    console.log('💡 Server will continue without Socket.IO (notifications may not work)');
   }
   
   console.log('='.repeat(60));

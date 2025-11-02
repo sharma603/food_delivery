@@ -17,19 +17,47 @@ class SocketService {
     try {
       const { default: io } = await import('socket.io-client');
       const token = await AsyncStorage.getItem('delivery_token');
+      
+      if (!token) {
+        return;
+      }
+
+      // Validate token format (basic check)
+      if (token.length < 10) {
+        return;
+      }
+
       this.socket = io(this.getSocketUrl(), {
         transports: ['websocket'],
-        query: { token, userType: 'delivery' },
+        auth: { token }, // Backend expects auth.token, not query.token
         reconnection: true,
         reconnectionAttempts: Infinity,
         reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
       });
 
-      this.socket.on('connect', () => {
-        // console.log('Socket connected');
+      this.socket.on('disconnect', (reason: string) => {
+        // If disconnected due to auth error, don't reconnect
+        if (reason === 'io server disconnect') {
+          this.disconnect();
+        }
       });
-      this.socket.on('disconnect', () => {
-        // console.log('Socket disconnected');
+
+      this.socket.on('connect_error', (error: Error) => {
+        const errorMsg = error.message || '';
+        // Handle authentication errors
+        if (errorMsg.includes('Authentication error') || errorMsg.includes('Invalid token')) {
+          // Disconnect and clear token if authentication fails
+          this.disconnect();
+          // Don't try to reconnect with invalid token
+          this.isEnabled = false;
+        }
+      });
+
+      // Handle authentication errors from server
+      this.socket.on('unauthorized', () => {
+        this.disconnect();
+        this.isEnabled = false;
       });
 
       // Wire any pre-registered listeners

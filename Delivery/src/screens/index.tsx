@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { deliveryAPI } from '../services/api';
 import { locationService } from '../services/locationService';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { notificationService } from '../services/notificationService';
 import MapView, { Marker } from 'react-native-maps';
 // import { LineChart, BarChart } from 'react-native-chart-kit';
@@ -44,6 +44,11 @@ interface DashboardStats {
     totalDistance: number;
     fuelEfficiency: number;
   };
+  cashInfo?: {
+    cashInHand: number;
+    pendingCashSubmission: number;
+    pendingCollectionsCount: number;
+  };
 }
 
 interface RealTimeData {
@@ -69,6 +74,11 @@ export default function DashboardScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [showCharts, setShowCharts] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cashSummary, setCashSummary] = useState<any>({
+    cashInHand: 0,
+    pendingCashSubmission: 0,
+    pendingCollections: 0
+  });
   
   // Animation values
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -136,6 +146,15 @@ export default function DashboardScreen() {
       locationService.stopTracking();
     };
   }, [isAuthenticated, token]);
+
+  // Refresh dashboard when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (isAuthenticated && token) {
+        loadDashboardData();
+      }
+    }, [isAuthenticated, token])
+  );
 
   // Ensure navigation is available when user goes online
   useEffect(() => {
@@ -212,7 +231,7 @@ export default function DashboardScreen() {
         const dashboardData = dashboardResponse.data.data;
         setRealTimeData(prev => ({
           ...prev,
-          activeOrders: dashboardData.recentOrders?.length || 0,
+          activeOrders: dashboardData.activeOrders || 0,
           estimatedEarnings: dashboardData.todayStats?.estimatedEarnings || 0,
           nextOrderETA: dashboardData.nextOrderETA || null,
         }));
@@ -254,8 +273,11 @@ export default function DashboardScreen() {
     try {
       setIsLoading(true);
       
-      // Fetch dashboard data from backend
-      const dashboardResponse = await deliveryAPI.getDashboard();
+      // Fetch dashboard data and cash summary from backend
+      const [dashboardResponse, cashSummaryResponse] = await Promise.all([
+        deliveryAPI.getDashboard(),
+        deliveryAPI.getCashSummary().catch(() => ({ data: { success: false } })) // Don't fail if cash summary fails
+      ]);
       console.log('Dashboard API response:', dashboardResponse.data);
       
       if (dashboardResponse.data.success) {
@@ -280,12 +302,36 @@ export default function DashboardScreen() {
             totalDistance: dashboardData.performance?.totalDistance || 0,
             fuelEfficiency: dashboardData.performance?.fuelEfficiency || 0,
           },
+          cashInfo: dashboardData.cashInfo || null,
         });
+        
+        // Load cash summary if available - always set cashInfo even if 0
+        if (cashSummaryResponse.data.success) {
+          setCashSummary(cashSummaryResponse.data.data);
+          setStats(prev => prev ? {
+            ...prev,
+            cashInfo: {
+              cashInHand: cashSummaryResponse.data.data.cashInHand || 0,
+              pendingCashSubmission: cashSummaryResponse.data.data.pendingCashSubmission || 0,
+              pendingCollectionsCount: cashSummaryResponse.data.data.pendingCollections || 0,
+            }
+          } : null);
+        } else {
+          // Even if API fails, initialize with 0 to show the section
+          setStats(prev => prev ? {
+            ...prev,
+            cashInfo: {
+              cashInHand: 0,
+              pendingCashSubmission: 0,
+              pendingCollectionsCount: 0,
+            }
+          } : null);
+        }
 
         // Update real-time data
         setRealTimeData(prev => ({
           ...prev,
-          activeOrders: dashboardData.recentOrders?.length || 0,
+          activeOrders: dashboardData.activeOrders || 0,
           estimatedEarnings: dashboardData.todayStats?.estimatedEarnings || 0,
           nextOrderETA: dashboardData.nextOrderETA || null,
         }));
@@ -337,7 +383,7 @@ export default function DashboardScreen() {
         setError(error?.response?.data?.message || error?.message || 'Failed to load dashboard');
       }
       
-      // Set empty/default values instead of mock data
+      // Set empty/default values on error
       setStats({
         todayEarnings: 0,
         todayDeliveries: 0,
@@ -592,6 +638,32 @@ export default function DashboardScreen() {
         )}
       </View>
 
+      {/* Cash Alert Banner */}
+      {stats?.cashInfo && (
+        <TouchableOpacity 
+          style={[styles.cashAlertBanner, stats.cashInfo.cashInHand === 0 && styles.cashAlertBannerEmpty]}
+          onPress={() => router.push('/cash-collection' as any)}
+        >
+          <View style={styles.cashAlertContent}>
+            <Ionicons name="wallet" size={24} color={stats.cashInfo.cashInHand > 0 ? "#FFD700" : "#999"} />
+            <View style={styles.cashAlertText}>
+              <Text style={styles.cashAlertTitle}>
+                Cash in Hand: Rs. {stats.cashInfo.cashInHand.toFixed(2)}
+              </Text>
+              {stats.cashInfo.pendingCollectionsCount > 0 && (
+                <Text style={styles.cashAlertSubtitle}>
+                  {stats.cashInfo.pendingCollectionsCount} pending deposit{stats.cashInfo.pendingCollectionsCount !== 1 ? 's' : ''}
+                </Text>
+              )}
+              {stats.cashInfo.cashInHand === 0 && stats.cashInfo.pendingCollectionsCount === 0 && (
+                <Text style={styles.cashAlertSubtitle}>No pending cash</Text>
+              )}
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={stats.cashInfo.cashInHand > 0 ? "#FFD700" : "#999"} />
+          </View>
+        </TouchableOpacity>
+      )}
+
       {/* Stats Cards */}
       <Animated.View 
         style={[
@@ -635,20 +707,56 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Ionicons name="checkmark-done-outline" size={24} color="#4ECDC4" />
-            <Text style={styles.statValue}>{stats?.completedDeliveries || 0}</Text>
-            <Text style={styles.statLabel}>Completed Orders</Text>
-            <Text style={styles.statSubtext}>All time</Text>
+        {/* Cash Info Row - Always show if cashInfo exists */}
+        {stats?.cashInfo ? (
+          <View style={styles.statsRow}>
+            <View style={[
+              styles.statCard, 
+              stats.cashInfo.cashInHand > 0 
+                ? { backgroundColor: '#FFF8E1', borderWidth: 1, borderColor: '#FFD700' } 
+                : {}
+            ]}>
+              <Ionicons 
+                name="cash" 
+                size={24} 
+                color={stats.cashInfo.cashInHand > 0 ? "#FFD700" : "#999"} 
+              />
+              <Text style={[styles.statValue, { color: stats.cashInfo.cashInHand > 0 ? '#333' : '#666' }]}>
+                Rs. {stats.cashInfo.cashInHand.toFixed(2)}
+              </Text>
+              <Text style={[styles.statLabel, { color: '#666' }]}>Cash in Hand</Text>
+              {stats.cashInfo.cashInHand > 0 && (
+                <TouchableOpacity 
+                  style={styles.depositButton}
+                  onPress={() => router.push('/cash-collection' as any)}
+                >
+                  <Text style={styles.depositButtonText}>Deposit Now</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="list-outline" size={24} color="#FF6B35" />
+              <Text style={styles.statValue}>{stats.cashInfo.pendingCollectionsCount}</Text>
+              <Text style={styles.statLabel}>Pending Deposits</Text>
+              <Text style={styles.statSubtext}>Cash collections</Text>
+            </View>
           </View>
-          <View style={styles.statCard}>
-            <Ionicons name="wallet-outline" size={24} color="#A8E6CF" />
-            <Text style={styles.statValue}>Rs. {stats?.totalEarnings || 0}</Text>
-            <Text style={styles.statLabel}>Total Earnings</Text>
-            <Text style={styles.statSubtext}>All time</Text>
+        ) : (
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <Ionicons name="checkmark-done-outline" size={24} color="#4ECDC4" />
+              <Text style={styles.statValue}>{stats?.completedDeliveries || 0}</Text>
+              <Text style={styles.statLabel}>Completed Orders</Text>
+              <Text style={styles.statSubtext}>All time</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="wallet-outline" size={24} color="#A8E6CF" />
+              <Text style={styles.statValue}>Rs. {stats?.totalEarnings || 0}</Text>
+              <Text style={styles.statLabel}>Total Earnings</Text>
+              <Text style={styles.statSubtext}>All time</Text>
+            </View>
           </View>
-        </View>
+        )}
       </Animated.View>
 
       {/* Map Section */}
@@ -1024,6 +1132,55 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#999',
     marginTop: 2,
+    textAlign: 'center',
+  },
+  cashAlertBanner: {
+    backgroundColor: '#FFF8E1',
+    margin: 20,
+    marginBottom: 0,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FFD700',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cashAlertBannerEmpty: {
+    backgroundColor: '#F5F5F5',
+    borderColor: '#E0E0E0',
+  },
+  cashAlertContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  cashAlertText: {
+    flex: 1,
+  },
+  cashAlertTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  cashAlertSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  depositButton: {
+    backgroundColor: '#FFD700',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    marginTop: 8,
+  },
+  depositButtonText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#333',
     textAlign: 'center',
   },
   chartsSection: {

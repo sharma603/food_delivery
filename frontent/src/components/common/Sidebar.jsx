@@ -124,6 +124,11 @@ const Sidebar = ({
           icon: UserCheck
         },
         {
+          name: 'Cash Collections',
+          path: '/admin/delivery/cash-collections',
+          icon: CreditCard
+        },
+        {
           name: 'Live Tracking',
           path: '/admin/delivery/tracking',
           icon: BarChart3

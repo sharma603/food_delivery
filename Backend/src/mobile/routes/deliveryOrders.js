@@ -12,7 +12,8 @@ import {
   sendDeliveryOtp,
   resendDeliveryOtp,
   submitDeliveryProof,
-  verifyDeliveryOtp
+  verifyDeliveryOtp,
+  getCashBalanceFromDeliveries
 } from '../controllers/deliveryOrderController.js';
 import { protect } from '../../middleware/auth.js';
 
@@ -23,6 +24,9 @@ router.use(protect);
 
 // Get delivery statistics
 router.get('/stats', getDeliveryStats);
+
+// Get cash balance from delivery records
+router.get('/cash-balance', getCashBalanceFromDeliveries);
 
 // Get all orders assigned to delivery boy
 router.get('/', getDeliveryBoyOrders);

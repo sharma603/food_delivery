@@ -10,7 +10,10 @@
     "dev": "nodemon server.js",
     "build": "echo \"No build step required\"",
     "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix"
+    "lint:fix": "eslint src/ --fix",
+    "test:delivery": "node scripts/testDeliveryCreation.js",
+    "check:cash": "node scripts/checkDeliveryPersonCash.js",
+    "backfill:cash": "node scripts/backfillCashCollections.js"
   },
   "keywords": [
     "food-delivery",
@@ -44,7 +47,7 @@
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "node-cron": "^3.0.2",
-    "nodemailer": "^6.9.4",
+    "nodemailer": "^7.0.10",
     "razorpay": "^2.9.2",
     "redis": "^4.6.8",
     "socket.io": "^4.7.2",

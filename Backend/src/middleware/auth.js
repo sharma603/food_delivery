@@ -15,11 +15,33 @@ const protect = async (req, res, next) => {
     try {
       token = req.headers.authorization.split(' ')[1];
 
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      let decoded;
+      try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET);
+      } catch (jwtError) {
+        // Handle token expiration specifically
+        if (jwtError.name === 'TokenExpiredError') {
+          return res.status(401).json({
+            success: false,
+            message: 'Token expired. Please refresh your token or login again.',
+            error: 'TokenExpiredError',
+            expiredAt: jwtError.expiredAt
+          });
+        }
+        // Handle other JWT errors
+        if (jwtError.name === 'JsonWebTokenError') {
+          return res.status(401).json({
+            success: false,
+            message: 'Invalid token. Please login again.',
+            error: 'JsonWebTokenError'
+          });
+        }
+        // Re-throw if it's not a known JWT error
+        throw jwtError;
+      }
 
       // Check if database is connected
       if (mongoose.connection.readyState !== 1) {
-        console.warn('Database not connected, skipping user lookup');
         return res.status(503).json({
           success: false,
           message: 'Database temporarily unavailable'
@@ -43,6 +65,8 @@ const protect = async (req, res, next) => {
           break;
         case 'delivery':
           user = await DeliveryPersonnel.findById(decoded.id).select('-password');
+          // Note: Delivery personnel can access routes regardless of status
+          // Status-based access control should be implemented at route/feature level if needed
           break;
         default:
           // Fallback to original User model for backward compatibility
@@ -61,7 +85,6 @@ const protect = async (req, res, next) => {
 
       next();
     } catch (error) {
-      console.error('Auth middleware error:', error);
       res.status(401).json({
         success: false,
         message: 'Not authorized, token failed'

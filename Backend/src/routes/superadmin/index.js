@@ -14,6 +14,7 @@ import userManagementRoutes from './userManagement.js';
 import paymentRoutes from './payments.js';
 import notificationRoutes from './notifications.js';
 import disputeRoutes from './disputes.js';
+import cashRoutes from './cash.js';
 
 const router = express.Router();
 
@@ -34,5 +35,6 @@ router.use('/users', userManagementRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/disputes', disputeRoutes);
+router.use('/cash', cashRoutes);
 
 export default router;

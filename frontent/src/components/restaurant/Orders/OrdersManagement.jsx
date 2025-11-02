@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNotification } from '../../../context/NotificationContext';
 import {
   Search,
-  Filter,
   Eye,
   Clock,
   CheckCircle,
@@ -14,13 +13,13 @@ import {
   MapPin,
   Calendar,
   Package,
-  TrendingUp,
-  MoreVertical,
   ArrowLeft,
   RefreshCw,
   Download,
   Printer,
-  FileText
+  FileText,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../../utils/api';
@@ -35,9 +34,9 @@ const OrdersManagement = () => {
   const [filterDate, setFilterDate] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
-  const [selectedOrders, setSelectedOrders] = useState([]);
-  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [showOrderFlowGuide, setShowOrderFlowGuide] = useState(false);
+  const ordersPerPage = 10;
 
   // Fetch orders from API
   const fetchOrders = async () => {
@@ -57,7 +56,13 @@ const OrdersManagement = () => {
         return;
       }
       
-      const response = await api.get('/restaurant/orders');
+      // Fetch ALL orders without pagination limit to enable frontend pagination
+      const response = await api.get('/restaurant/orders', {
+        params: {
+          limit: 10000, // Fetch all orders (high limit to get all)
+          page: 1
+        }
+      });
       
       if (response.data.success && response.data.data) {
         // Handle the correct API response structure: { success: true, data: { orders: [...] } }
@@ -78,9 +83,53 @@ const OrdersManagement = () => {
                          order.customer?.email ||
                          'Unknown Customer',
             customerPhone: order.customer?.phone || 'N/A',
-          customerAddress: order.deliveryAddress?.street ? 
-            `${order.deliveryAddress.street}, ${order.deliveryAddress.city}` : 
-            'N/A',
+          // Get customer address from Customer table (addresses array)
+          customerAddress: (() => {
+            // First, try to match order's deliveryAddress with customer's addresses
+            if (order.customer?.addresses && Array.isArray(order.customer.addresses) && order.customer.addresses.length > 0) {
+              let addressToUse = null;
+              
+              // Try to find matching address based on street and city
+              if (order.deliveryAddress?.street && order.deliveryAddress?.city) {
+                addressToUse = order.customer.addresses.find(addr => 
+                  addr.street?.toLowerCase() === order.deliveryAddress.street?.toLowerCase() &&
+                  addr.city?.toLowerCase() === order.deliveryAddress.city?.toLowerCase()
+                );
+              }
+              
+              // If no match found, use default address, otherwise first address
+              if (!addressToUse) {
+                addressToUse = order.customer.addresses.find(addr => addr.isDefault) || order.customer.addresses[0];
+              }
+              
+              // Format address from Customer table
+              if (addressToUse) {
+                const parts = [
+                  addressToUse.apartment,
+                  addressToUse.street,
+                  addressToUse.city,
+                  addressToUse.state,
+                  addressToUse.zipCode,
+                  addressToUse.country && addressToUse.country !== 'Nepal' ? addressToUse.country : null
+                ].filter(Boolean);
+                return parts.length > 0 ? parts.join(', ') : 'N/A';
+              }
+            }
+            
+            // Fallback to order's deliveryAddress if customer addresses not available
+            if (order.deliveryAddress?.street) {
+              const parts = [
+                order.deliveryAddress.apartment,
+                order.deliveryAddress.street,
+                order.deliveryAddress.city,
+                order.deliveryAddress.state,
+                order.deliveryAddress.zipCode || order.deliveryAddress.pincode
+              ].filter(Boolean);
+              return parts.length > 0 ? parts.join(', ') : `${order.deliveryAddress.street}, ${order.deliveryAddress.city || ''}`.trim() || 'N/A';
+            }
+            
+            return 'N/A';
+          })(),
           orderDate: new Date(order.createdAt).toISOString().split('T')[0],
           orderTime: new Date(order.createdAt).toLocaleTimeString('en-US', { 
             hour12: false, 
@@ -95,8 +144,18 @@ const OrdersManagement = () => {
             new Date(order.estimatedDeliveryTime).toLocaleTimeString() : 
             '30-45 minutes',
           deliveryCharge: order.pricing?.deliveryCharge || order.deliveryCharge || 0,
-          zone: order.deliveryAddress?.zone || order.zone || 'Zone A - West Bay',
-          zoneName: order.deliveryAddress?.zoneName || order.zoneName || 'West Bay',
+          // Get zone information from order - use actual zone data from delivery person or order
+          // DO NOT use dummy fallback values
+          zone: (order.zone && typeof order.zone === 'object' ? order.zone.name : null) ||
+                (order.deliveryPerson && order.deliveryPerson.zone && typeof order.deliveryPerson.zone === 'object' ? order.deliveryPerson.zone.name : null) ||
+                (order.deliveryPerson?.zoneName || null) ||
+                (order.deliveryAddress?.zone && typeof order.deliveryAddress.zone === 'object' ? order.deliveryAddress.zone.name : (typeof order.deliveryAddress?.zone === 'string' && order.deliveryAddress.zone !== 'Zone A - West Bay' ? order.deliveryAddress.zone : null)) ||
+                null,
+          zoneName: (order.zone && typeof order.zone === 'object' ? (order.zone.coverage || order.zone.name) : null) ||
+                    (order.deliveryPerson && order.deliveryPerson.zone && typeof order.deliveryPerson.zone === 'object' ? (order.deliveryPerson.zone.coverage || order.deliveryPerson.zone.name) : null) ||
+                    (order.deliveryPerson?.zoneName || null) ||
+                    (order.deliveryAddress?.zoneName && order.deliveryAddress.zoneName !== 'West Bay' ? order.deliveryAddress.zoneName : null) ||
+                    null,
           deliveryPerson: order.deliveryPerson || null, // Include delivery person assignment
           createdAt: order.createdAt,
           updatedAt: order.updatedAt,
@@ -129,6 +188,7 @@ const OrdersManagement = () => {
     }, 30000);
     
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Filter orders
@@ -143,10 +203,15 @@ const OrdersManagement = () => {
     return matchesSearch && matchesStatus && matchesDate;
   });
 
-  // Clear selections when filters change
+  // Pagination
+  const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
+  const startIndex = (currentPage - 1) * ordersPerPage;
+  const endIndex = startIndex + ordersPerPage;
+  const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters change
   useEffect(() => {
-    setSelectedOrders([]);
-    setShowBulkActions(false);
+    setCurrentPage(1);
   }, [searchTerm, filterStatus, filterDate]);
 
   // Get status color and icon
@@ -1170,106 +1235,6 @@ const OrdersManagement = () => {
     showNotification('Professional orders report opened for printing (A5 format)', 'success');
   };
 
-  // Handle individual order selection
-  const handleOrderSelect = (orderId) => {
-    setSelectedOrders(prev => {
-      if (prev.includes(orderId)) {
-        const newSelected = prev.filter(id => id !== orderId);
-        setShowBulkActions(newSelected.length > 0);
-        return newSelected;
-      } else {
-        const newSelected = [...prev, orderId];
-        setShowBulkActions(newSelected.length > 0);
-        return newSelected;
-      }
-    });
-  };
-
-  // Handle select all orders
-  const handleSelectAll = () => {
-    if (selectedOrders.length === filteredOrders.length) {
-      setSelectedOrders([]);
-      setShowBulkActions(false);
-    } else {
-      const allOrderIds = filteredOrders.map(order => order.id);
-      setSelectedOrders(allOrderIds);
-      setShowBulkActions(true);
-    }
-  };
-
-  // Bulk update order status
-  const bulkUpdateOrderStatus = async (newStatus) => {
-    try {
-      // Prevent bulk confirm/deliver operations
-      if (newStatus === 'confirmed' || newStatus === 'delivered') {
-        showNotification('This action is not allowed for restaurants', 'error');
-        return;
-      }
-      
-      // Prevent changing status from ready back to preparing
-      if (newStatus === 'preparing') {
-        const selectedOrdersData = orders.filter(order => selectedOrders.includes(order.id));
-        const readyOrders = selectedOrdersData.filter(order => 
-          ['ready', 'picked_up', 'delivered', 'completed'].includes(order.status)
-        );
-        
-        if (readyOrders.length > 0) {
-          showNotification(`Cannot change status to preparing for orders that are marked as ready or later. ${readyOrders.length} order(s) cannot be changed.`, 'error');
-          return;
-        }
-      }
-      
-      // Prevent cancellation of orders that are ready or later OR assigned to delivery person
-      if (newStatus === 'cancelled') {
-        const selectedOrdersData = orders.filter(order => selectedOrders.includes(order.id));
-        const nonCancellableOrders = selectedOrdersData.filter(order => {
-          const isReadyOrLater = ['ready', 'picked_up', 'delivered', 'completed'].includes(order.status);
-          const hasDeliveryPerson = order.deliveryPerson || (order.originalOrder && order.originalOrder.deliveryPerson);
-          return isReadyOrLater || hasDeliveryPerson;
-        });
-        
-        if (nonCancellableOrders.length > 0) {
-          const readyCount = nonCancellableOrders.filter(o => ['ready', 'picked_up', 'delivered', 'completed'].includes(o.status)).length;
-          const deliveryCount = nonCancellableOrders.filter(o => o.deliveryPerson || (o.originalOrder && o.originalOrder.deliveryPerson)).length;
-          let message = '';
-          if (readyCount > 0 && deliveryCount > 0) {
-            message = `Cannot cancel ${nonCancellableOrders.length} order(s): ${readyCount} marked as ready or later, ${deliveryCount} assigned to delivery person.`;
-          } else if (readyCount > 0) {
-            message = `Cannot cancel orders that are marked as ready or later. ${readyCount} order(s) cannot be cancelled.`;
-          } else {
-            message = `Cannot cancel orders that have been assigned to a delivery person. ${deliveryCount} order(s) cannot be cancelled.`;
-          }
-          showNotification(message, 'error');
-          return;
-        }
-      }
-      
-      const promises = selectedOrders.map(orderId => 
-        api.put(`/restaurant/orders/${orderId}`, { status: newStatus })
-      );
-
-      const results = await Promise.all(promises);
-      const successCount = results.filter(result => result.data.success).length;
-      
-      if (successCount > 0) {
-        // Update local state
-        setOrders(orders.map(order => 
-          selectedOrders.includes(order.id) 
-            ? { ...order, status: newStatus, updatedAt: new Date().toISOString() }
-            : order
-        ));
-        
-        showNotification(`${successCount} orders updated to ${newStatus}`, 'success');
-      }
-      
-      // Clear selection
-      setSelectedOrders([]);
-      setShowBulkActions(false);
-      
-    } catch (error) {
-      showNotification('Error updating orders', 'error');
-    }
-  };
 
   // Update order status
   const updateOrderStatus = async (orderId, newStatus) => {
@@ -1334,13 +1299,15 @@ const OrdersManagement = () => {
     const today = new Date().toISOString().split('T')[0];
     const todayOrders = orders.filter(order => order.orderDate === today);
     
+    // Calculate today's revenue from today's orders only
+    const todayRevenue = todayOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+    
     const stats = {
       total: orders.length,
-      pending: orders.filter(o => o.status === 'pending' || o.status === 'placed').length,
+      pending: orders.filter(o => ['pending', 'placed', 'confirmed', 'preparing'].includes(o.status)).length,
       today: todayOrders.length,
-      revenue: orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0)
+      revenue: todayRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     };
-    
     
     return stats;
   };
@@ -1602,84 +1569,6 @@ const OrdersManagement = () => {
             </div>
           </div>
 
-          {/* Bulk Actions */}
-          {showBulkActions && (() => {
-            // Check if any selected orders are in ready status or later OR assigned to delivery person (cannot be cancelled)
-            const selectedOrdersData = orders.filter(order => selectedOrders.includes(order.id));
-            const hasNonCancellableOrders = selectedOrdersData.some(order => {
-              const isReadyOrLater = ['ready', 'picked_up', 'delivered', 'completed'].includes(order.status);
-              const hasDeliveryPerson = order.deliveryPerson || (order.originalOrder && order.originalOrder.deliveryPerson);
-              return isReadyOrLater || hasDeliveryPerson;
-            });
-            const canCancel = !hasNonCancellableOrders;
-            
-            // Check if any selected orders are ready or later (cannot change to preparing)
-            const hasReadyOrLaterOrders = selectedOrdersData.some(order => 
-              ['ready', 'picked_up', 'delivered', 'completed'].includes(order.status)
-            );
-            const canStartPreparing = !hasReadyOrLaterOrders;
-            
-            return (
-            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <span className="text-sm font-medium text-orange-800">
-                    {selectedOrders.length} order{selectedOrders.length !== 1 ? 's' : ''} selected
-                  </span>
-                  <div className="flex items-center space-x-2">
-                    {canStartPreparing ? (
-                      <button
-                        onClick={() => bulkUpdateOrderStatus('preparing')}
-                        className="px-3 py-1.5 bg-orange-600 text-white text-xs font-medium rounded-lg hover:bg-orange-700 transition-colors"
-                      >
-                        Start Preparing
-                      </button>
-                    ) : (
-                      <button
-                        disabled
-                        className="px-3 py-1.5 bg-gray-400 text-white text-xs font-medium rounded-lg cursor-not-allowed opacity-50"
-                        title="Cannot change status to preparing for orders that are marked as ready or later"
-                      >
-                        Start Preparing
-                      </button>
-                    )}
-                    <button
-                      onClick={() => bulkUpdateOrderStatus('ready')}
-                      className="px-3 py-1.5 bg-purple-600 text-white text-xs font-medium rounded-lg hover:bg-purple-700 transition-colors"
-                    >
-                      Mark Ready
-                    </button>
-                    {canCancel ? (
-                      <button
-                        onClick={() => bulkUpdateOrderStatus('cancelled')}
-                        className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors"
-                      >
-                        Cancel Selected
-                      </button>
-                    ) : (
-                      <button
-                        disabled
-                        className="px-3 py-1.5 bg-gray-400 text-white text-xs font-medium rounded-lg cursor-not-allowed opacity-50"
-                        title="Cannot cancel orders that are marked as ready or later, or assigned to a delivery person"
-                      >
-                        Cancel Selected
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setSelectedOrders([]);
-                    setShowBulkActions(false);
-                  }}
-                  className="text-orange-600 hover:text-orange-800 text-sm font-medium"
-                >
-                  Clear Selection
-                </button>
-              </div>
-            </div>
-            );
-          })()}
 
           {/* Orders Table */}
           <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
@@ -1688,15 +1577,7 @@ const OrdersManagement = () => {
                 <thead className="bg-gradient-to-r from-orange-50 to-orange-100 border-b-2 border-orange-200">
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-orange-800 uppercase tracking-wider">
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedOrders.length === filteredOrders.length && filteredOrders.length > 0}
-                          onChange={handleSelectAll}
-                          className="w-4 h-4 text-orange-600 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 focus:ring-2"
-                        />
-                        <span>Order ID</span>
-                      </div>
+                      Order ID
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-orange-800 uppercase tracking-wider">Customer</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-orange-800 uppercase tracking-wider">Date & Time</th>
@@ -1709,22 +1590,14 @@ const OrdersManagement = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-100">
-                  {filteredOrders.map((order) => {
+                  {paginatedOrders.map((order) => {
                     const statusInfo = getStatusInfo(order.status);
                     const StatusIcon = statusInfo.icon;
                     
                     return (
                       <tr key={order.id} className="hover:bg-orange-50 transition-colors duration-200">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center space-x-3">
-                            <input
-                              type="checkbox"
-                              checked={selectedOrders.includes(order.id)}
-                              onChange={() => handleOrderSelect(order.id)}
-                              className="w-4 h-4 text-orange-600 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 focus:ring-2"
-                            />
-                            <div className="text-sm font-semibold text-gray-900">{order.orderNumber || order.id}</div>
-                          </div>
+                          <div className="text-sm font-semibold text-gray-900">{order.orderNumber || order.id}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center space-x-3">
@@ -1794,8 +1667,8 @@ const OrdersManagement = () => {
                           <div className="flex items-center space-x-2">
                             <MapPin className="w-4 h-4 text-orange-500" />
                             <div>
-                              <div className="text-sm font-medium text-gray-900">{order.zone}</div>
-                              <div className="text-sm text-gray-500">{order.zoneName}</div>
+                              <div className="text-sm font-medium text-gray-900">{order.zone || 'N/A'}</div>
+                              <div className="text-sm text-gray-500">{order.zoneName || ''}</div>
                             </div>
                           </div>
                         </td>
@@ -1883,6 +1756,76 @@ const OrdersManagement = () => {
                 </tbody>
               </table>
             </div>
+            
+            {/* Pagination */}
+            {filteredOrders.length > 0 && (
+              <div className="bg-white border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Showing <span className="font-semibold">{startIndex + 1}</span> to{' '}
+                  <span className="font-semibold">{Math.min(endIndex, filteredOrders.length)}</span> of{' '}
+                  <span className="font-semibold">{filteredOrders.length}</span> orders
+                  {totalPages > 1 && (
+                    <span className="ml-2 text-gray-500">(Page {currentPage} of {totalPages})</span>
+                  )}
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1 || totalPages <= 1}
+                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors flex items-center space-x-1 ${
+                      currentPage === 1 || totalPages <= 1
+                        ? 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
+                        : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span>Previous</span>
+                  </button>
+                  {totalPages > 1 && (
+                    <div className="flex items-center space-x-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                              currentPage === pageNum
+                                ? 'bg-orange-600 text-white'
+                                : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages || totalPages <= 1}
+                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors flex items-center space-x-1 ${
+                      currentPage === totalPages || totalPages <= 1
+                        ? 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
+                        : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span>Next</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Empty State */}

@@ -18,7 +18,7 @@ export default function HelpScreen() {
         <View style={{ width: 24 }} />
       </View>
       <View style={styles.section}>
-        <TouchableOpacity style={styles.row} onPress={() => Linking.openURL('mailto:support@example.com')}>
+        <TouchableOpacity style={styles.row} onPress={() => Linking.openURL('mailto:support@fooddelivery.com')}>
           <Ionicons name="mail-outline" size={20} color="#FF6B35" />
           <Text style={styles.rowText}>{t('emailSupport')}</Text>
         </TouchableOpacity>

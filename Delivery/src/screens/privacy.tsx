@@ -16,7 +16,7 @@ export default function PrivacyScreen() {
   const { user } = useAuth();
 
   const handleContactSupport = () => {
-    Linking.openURL('mailto:support@example.com');
+    Linking.openURL('mailto:support@fooddelivery.com');
   };
 
   return (
@@ -88,7 +88,7 @@ export default function PrivacyScreen() {
             onPress={handleContactSupport}
           >
             <Ionicons name="mail-outline" size={20} color="#FF6B35" />
-            <Text style={styles.contactButtonText}>support@example.com</Text>
+            <Text style={styles.contactButtonText}>support@fooddelivery.com</Text>
           </TouchableOpacity>
         </View>
       </View>

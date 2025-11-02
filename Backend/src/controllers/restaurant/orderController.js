@@ -1,8 +1,7 @@
 import Order from '../../models/Order.js';
 import DeliveryPersonnel from '../../models/DeliveryPersonnel.js';
 import { asyncHandler } from '../../utils/helpers.js';
-import { sendOrderStatusUpdate } from '../../services/notificationService.js';
-import { getIO } from '../../config/socket.js';
+import { sendOrderStatusUpdate, notifyDeliveryPartners } from '../../services/notificationService.js';
 
 // @desc    Get restaurant orders
 // @route   GET /api/v1/restaurant/orders
@@ -28,13 +27,35 @@ export const getRestaurantOrders = asyncHandler(async (req, res) => {
     if (dateTo) query.createdAt.$lte = new Date(dateTo);
   }
 
+  // Populate delivery person with zone information
   const orders = await Order.find(query)
-    .populate('customer', 'name email phone')
-    .populate('restaurant', 'restaurantName email phone address')
-    .populate('deliveryPerson', 'name email phone')
+    .populate({
+      path: 'customer',
+      select: 'name email phone addresses'
+    })
+    .populate({
+      path: 'restaurant',
+      select: 'restaurantName email phone address'
+    })
+    .populate({
+      path: 'deliveryPerson',
+      select: 'name email phone vehicleType vehicleNumber zone zoneName',
+      populate: {
+        path: 'zone',
+        select: 'name coverage areas deliveryCharge',
+        model: 'Zone'
+      }
+    })
     .sort({ createdAt: -1 })
     .limit(limit * 1)
     .skip((page - 1) * limit);
+  
+  // Attach zone from delivery person to order for easier access
+  orders.forEach(order => {
+    if (order.deliveryPerson?.zone && typeof order.deliveryPerson.zone === 'object') {
+      order.zone = order.deliveryPerson.zone;
+    }
+  });
 
   console.log(`Fetched ${orders.length} orders for restaurant ${req.user._id}`);
   
@@ -467,58 +488,7 @@ export const markAsReady = asyncHandler(async (req, res) => {
 
   // Notify all online delivery persons about the new ready order
   try {
-    // Find all online delivery persons
-    const onlineDeliveryPersons = await DeliveryPersonnel.find({
-      isOnline: true,
-      status: { $in: ['active', 'on_duty'] }
-    }).select('_id name email');
-
-    // Prepare notification data
-    const notificationData = {
-      type: 'new_order_ready',
-      title: 'New Order Ready for Pickup',
-      message: `Order #${order.orderNumber} from ${order.restaurant?.restaurantName || 'Restaurant'} is ready for pickup`,
-      order: {
-        _id: order._id,
-        orderNumber: order.orderNumber,
-        status: order.status,
-        restaurant: {
-          name: order.restaurant?.restaurantName,
-          address: order.restaurant?.address,
-          phone: order.restaurant?.phone
-        },
-        customer: {
-          name: order.customer?.name,
-          address: order.deliveryAddress
-        },
-        pricing: order.pricing,
-        createdAt: order.createdAt
-      },
-      timestamp: new Date()
-    };
-
-    // Get Socket.IO instance
-    const io = getIO();
-
-    // Send notification to all delivery persons through socket
-    // Send to 'delivery' room (all delivery persons connected - socket.userType === 'delivery')
-    try {
-      io.to('delivery').emit('order:ready', notificationData);
-      console.log('📢 Emitted to delivery room');
-    } catch (error) {
-      console.error('Error emitting to delivery room:', error);
-    }
-
-    // Also send to individual delivery person rooms for reliability
-    onlineDeliveryPersons.forEach(person => {
-      try {
-        io.to(`user_${person._id}`).emit('order:ready', notificationData);
-      } catch (error) {
-        console.error(`Error emitting to user ${person._id}:`, error);
-      }
-    });
-
-    console.log(`✅ Order #${order.orderNumber} marked as ready - Notified ${onlineDeliveryPersons.length} online delivery persons via Socket.IO`);
+    await notifyDeliveryPartners(order, 'order_ready');
   } catch (notificationError) {
     console.error('Error sending notification to delivery persons:', notificationError);
     // Don't fail the request if notification fails
