@@ -18,10 +18,13 @@ import {
 
 const router = express.Router();
 
-// Ensure uploads directory exists
+// Ensure uploads directory exists - Use absolute path
 const uploadsDir = path.join(process.cwd(), 'uploads', 'menu-items');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('✅ Created menu-items upload directory:', uploadsDir);
+} else {
+  console.log('✅ Menu-items upload directory exists:', uploadsDir);
 }
 
 // Configure multer for file uploads

@@ -7,16 +7,19 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Create uploads directory if it doesn't exist
-const uploadDir = path.join(__dirname, '../../uploads/menu-items');
+// Create uploads directory if it doesn't exist - Use process.cwd() for consistency
+const uploadDir = path.join(process.cwd(), 'uploads', 'menu-items');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
-  console.log('Created menu-items upload directory');
+  console.log('✅ Created menu-items upload directory:', uploadDir);
+} else {
+  console.log('✅ Menu-items upload directory exists:', uploadDir);
 }
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/menu-items/');
+    // Use absolute path for reliable file storage
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(0 * 1E9);

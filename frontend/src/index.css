@@ -1,0 +1,126 @@
+/* Tailwind CSS is now loaded via CDN */
+
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+/* Additional base styles */
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f9fafb;
+  line-height: 1.6;
+}
+
+code {
+  font-family: 'JetBrains Mono', source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+  background-color: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+/* Remove default margin and padding from all elements */
+* {
+  box-sizing: border-box;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Focus styles for better accessibility */
+:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Selection styles */
+::selection {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  /* Ensure body doesn't overflow */
+  body {
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  /* Prevent horizontal scrolling */
+  html {
+    overflow-x: hidden;
+  }
+
+  /* Touch-friendly buttons */
+  button, a, input, select, textarea {
+    min-height: 44px; /* iOS recommended touch target */
+  }
+
+  /* Better text sizing on mobile */
+  body {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  /* Better input handling on mobile */
+  input, textarea, select {
+    font-size: 16px; /* Prevents zoom on iOS */
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Container padding for mobile */
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+/* Tablet styles */
+@media (min-width: 769px) and (max-width: 1024px) {
+  /* Tablet-specific adjustments */
+  .container {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+/* Mobile-first: Stack on small screens */
+@media (max-width: 640px) {
+  /* Stack flex items on mobile */
+  .flex-row {
+    flex-direction: column;
+  }
+
+  /* Full width cards on mobile */
+  .card, .bg-white {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Better spacing on mobile */
+  .space-y-4 > * + * {
+    margin-top: 1rem;
+  }
+
+  /* Hide less important elements on mobile */
+  .hide-mobile {
+    display: none !important;
+  }
+}
+
+/* Prevent text overflow */
+* {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Better table handling on mobile - Global (applies everywhere except restaurant portal which has its own styles) */
+/* Restaurant portal has its own responsive styles in restaurant-responsive.css */

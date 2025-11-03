@@ -7,7 +7,7 @@
 
 export const SERVER_CONFIG = {
   // Development (Local Machine)
-  IP: '192.168.18.38',
+  IP: '192.168.1.108',
   PORT: '5000',
   PROTOCOL: 'http',
   

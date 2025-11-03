@@ -51,7 +51,11 @@ export const getAllMenuItems = async (req, res) => {
     
     const menuItems = await MenuItem.find(query)
       .populate('restaurant', 'restaurantName cuisine')
-      .populate('category', 'name')
+      .populate({
+        path: 'category',
+        select: 'name displayName',
+        match: { isDeleted: { $ne: true } } // Only populate if category is not deleted
+      })
       .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -260,11 +264,28 @@ export const updateMenuItem = async (req, res) => {
       });
     }
 
-    // Handle file uploads
+    // Handle file uploads - Delete old images if new ones are uploaded
     if (req.files && req.files.length > 0) {
-      // Update image URLs
+      // Import file utility to delete old images
+      const { deleteMultipleImageFiles } = await import('../../utils/fileUtils.js');
+      
+      // Delete old images before adding new ones
+      if (menuItem.images && Array.isArray(menuItem.images) && menuItem.images.length > 0) {
+        try {
+          const { deleted, failed } = await deleteMultipleImageFiles(menuItem.images);
+          console.log(`Deleted ${deleted} old image(s) for menu item ${id}. Failed: ${failed}`);
+        } catch (fileError) {
+          console.error('Error deleting old image files:', fileError.message);
+          // Continue with update even if old file deletion fails
+        }
+      }
+      
+      // Update with new image URLs
       const imageUrls = req.files.map(file => `/uploads/menu-items/${file.filename}`);
       updateData.images = imageUrls;
+    } else if (req.body.images !== undefined) {
+      // If images array is explicitly set in body (e.g., to clear images or update URLs)
+      updateData.images = Array.isArray(req.body.images) ? req.body.images : [];
     }
 
     // Handle category update
@@ -290,12 +311,26 @@ export const updateMenuItem = async (req, res) => {
       updateData,
       { new: true, runValidators: true }
     ).populate('restaurant', 'restaurantName cuisine')
-     .populate('category', 'name');
+     .populate({
+       path: 'category',
+       select: 'name displayName',
+       match: { isDeleted: { $ne: true } } // Only populate if category is not deleted
+     });
+
+    // Format response to ensure category is properly handled
+    const formattedItem = {
+      ...updatedItem.toObject(),
+      category: (updatedItem.category && typeof updatedItem.category === 'object' && updatedItem.category.name) 
+        ? { name: updatedItem.category.name, displayName: updatedItem.category.displayName || updatedItem.category.name, _id: updatedItem.category._id }
+        : (updatedItem.category && typeof updatedItem.category === 'object' && updatedItem.category.displayName)
+        ? { name: updatedItem.category.displayName, displayName: updatedItem.category.displayName, _id: updatedItem.category._id }
+        : null // Don't include ObjectId strings
+    };
 
     res.status(200).json({
       success: true,
       message: 'Menu item updated successfully',
-      data: updatedItem
+      data: formattedItem
     });
 
   } catch (error) {
@@ -331,6 +366,26 @@ export const deleteMenuItem = async (req, res) => {
       });
     }
 
+    // Import file utility function
+    const { deleteMultipleImageFiles } = await import('../../utils/fileUtils.js');
+
+    // Delete associated image files before deleting the menu item
+    if (menuItem.images && Array.isArray(menuItem.images) && menuItem.images.length > 0) {
+      try {
+        const { deleted, failed } = await deleteMultipleImageFiles(menuItem.images);
+        console.log(`Deleted ${deleted} image(s) for menu item ${id}. Failed: ${failed}`);
+        
+        // Log warning if some files failed to delete (but don't block deletion)
+        if (failed > 0) {
+          console.warn(`Warning: ${failed} image file(s) could not be deleted for menu item ${id}`);
+        }
+      } catch (fileError) {
+        // Log error but don't block menu item deletion
+        console.error('Error deleting image files:', fileError.message);
+      }
+    }
+
+    // Delete the menu item from database
     await MenuItem.findByIdAndDelete(id);
 
     res.status(200).json({

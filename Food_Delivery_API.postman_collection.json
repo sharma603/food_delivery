@@ -1,0 +1,512 @@
+{
+	"info": {
+		"_postman_id": "food-delivery-api-001",
+		"name": "Food Delivery API",
+		"description": "Complete API collection for Food Delivery System",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{BASE_URL}}/health",
+					"host": ["{{BASE_URL}}"],
+					"path": ["health"]
+				},
+				"description": "Check if server is running"
+			}
+		},
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Customer Register",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\",\n  \"phone\": \"1234567890\"\n}"
+						},
+						"url": {
+							"raw": "{{API_BASE}}/customer/auth/register",
+							"host": ["{{API_BASE}}"],
+							"path": ["customer", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Customer Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    if (jsonData.token) {",
+									"        pm.environment.set(\"TOKEN\", jsonData.token);",
+									"        console.log(\"Token saved to environment\");",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{API_BASE}}/customer/auth/login",
+							"host": ["{{API_BASE}}"],
+							"path": ["customer", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Admin Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"admin123\"\n}"
+						},
+						"url": {
+							"raw": "{{API_BASE}}/admin/auth/login",
+							"host": ["{{API_BASE}}"],
+							"path": ["admin", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Restaurant Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"restaurant@example.com\",\n  \"password\": \"restaurant123\"\n}"
+						},
+						"url": {
+							"raw": "{{API_BASE}}/restaurant/auth/login",
+							"host": ["{{API_BASE}}"],
+							"path": ["restaurant", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Delivery Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phone\": \"1234567890\",\n  \"password\": \"delivery123\"\n}"
+						},
+						"url": {
+							"raw": "{{API_BASE}}/delivery/auth/login",
+							"host": ["{{API_BASE}}"],
+							"path": ["delivery", "auth", "login"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Restaurants",
+			"item": [
+				{
+					"name": "Get All Restaurants",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{API_BASE}}/restaurants?page=1&limit=10",
+							"host": ["{{API_BASE}}"],
+							"path": ["restaurants"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Restaurant by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{API_BASE}}/restaurants/:id",
+							"host": ["{{API_BASE}}"],
+							"path": ["restaurants", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "507f1f77bcf86cd799439011"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Restaurant",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{TOKEN}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"New Restaurant\",\n  \"cuisine\": \"Italian\",\n  \"address\": \"123 Main St\",\n  \"city\": \"Kathmandu\",\n  \"phone\": \"1234567890\",\n  \"email\": \"restaurant@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{API_BASE}}/restaurants",
+							"host": ["{{API_BASE}}"],
+							"path": ["restaurants"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Orders",
+			"item": [
+				{
+					"name": "Create Order",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{TOKEN}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"restaurantId\": \"507f1f77bcf86cd799439011\",\n  \"items\": [\n    {\n      \"menuItemId\": \"507f1f77bcf86cd799439012\",\n      \"quantity\": 2,\n      \"price\": 500\n    }\n  ],\n  \"deliveryAddress\": \"123 Main St, Kathmandu\",\n  \"paymentMethod\": \"cash\"\n}"
+						},
+						"url": {
+							"raw": "{{API_BASE}}/orders",
+							"host": ["{{API_BASE}}"],
+							"path": ["orders"]
+						}
+					}
+				},
+				{
+					"name": "Get My Orders",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{TOKEN}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{API_BASE}}/orders/my-orders",
+							"host": ["{{API_BASE}}"],
+							"path": ["orders", "my-orders"]
+						}
+					}
+				},
+				{
+					"name": "Get Order by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{TOKEN}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{API_BASE}}/orders/:id",
+							"host": ["{{API_BASE}}"],
+							"path": ["orders", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "507f1f77bcf86cd799439011"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Delivery",
+			"item": [
+				{
+					"name": "Get Available Orders",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{TOKEN}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{API_BASE}}/delivery/orders/available",
+							"host": ["{{API_BASE}}"],
+							"path": ["delivery", "orders", "available"]
+						}
+					}
+				},
+				{
+					"name": "Accept Order",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{TOKEN}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{API_BASE}}/delivery/orders/:orderId/accept",
+							"host": ["{{API_BASE}}"],
+							"path": ["delivery", "orders", ":orderId", "accept"],
+							"variable": [
+								{
+									"key": "orderId",
+									"value": "507f1f77bcf86cd799439011"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Location",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{TOKEN}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"latitude\": 27.7172,\n  \"longitude\": 85.3240\n}"
+						},
+						"url": {
+							"raw": "{{API_BASE}}/delivery/location",
+							"host": ["{{API_BASE}}"],
+							"path": ["delivery", "location"]
+						}
+					}
+				},
+				{
+					"name": "Get Earnings",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{TOKEN}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{API_BASE}}/delivery/earnings",
+							"host": ["{{API_BASE}}"],
+							"path": ["delivery", "earnings"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Mobile",
+			"item": [
+				{
+					"name": "Mobile Register",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Mobile User\",\n  \"email\": \"mobile@example.com\",\n  \"password\": \"mobile123\",\n  \"phone\": \"1234567890\"\n}"
+						},
+						"url": {
+							"raw": "{{API_BASE}}/mobile/auth/register",
+							"host": ["{{API_BASE}}"],
+							"path": ["mobile", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Mobile Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"mobile@example.com\",\n  \"password\": \"mobile123\"\n}"
+						},
+						"url": {
+							"raw": "{{API_BASE}}/mobile/auth/login",
+							"host": ["{{API_BASE}}"],
+							"path": ["mobile", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Get Mobile Orders",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{TOKEN}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{API_BASE}}/mobile/orders",
+							"host": ["{{API_BASE}}"],
+							"path": ["mobile", "orders"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "BASE_URL",
+			"value": "http://72.60.206.253:5000",
+			"type": "string"
+		},
+		{
+			"key": "API_BASE",
+			"value": "{{BASE_URL}}/api/v1",
+			"type": "string"
+		},
+		{
+			"key": "TOKEN",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+

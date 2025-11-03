@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { deliveryAPI } from '../services/api';
+import { useRouter } from 'expo-router';
 
 interface EarningsData {
   todayEarnings: number;
@@ -33,11 +34,13 @@ interface EarningsHistory {
 }
 
 export default function EarningsScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const [earnings, setEarnings] = useState<EarningsData | null>(null);
   const [earningsHistory, setEarningsHistory] = useState<EarningsHistory[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'total'>('today');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [cashSummary, setCashSummary] = useState<any>(null);
 
   useEffect(() => {
     loadEarningsData();
@@ -46,9 +49,10 @@ export default function EarningsScreen() {
   const loadEarningsData = async () => {
     try {
       setIsRefreshing(true);
-      const [earningsResponse, historyResponse] = await Promise.all([
+      const [earningsResponse, historyResponse, cashSummaryResponse] = await Promise.all([
         deliveryAPI.getEarnings(selectedPeriod),
         deliveryAPI.getEarningsHistory(),
+        deliveryAPI.getCashSummary().catch(() => ({ data: { success: false } })),
       ]);
 
       if (earningsResponse.data.success) {
@@ -57,6 +61,10 @@ export default function EarningsScreen() {
 
       if (historyResponse.data.success) {
         setEarningsHistory(historyResponse.data.data);
+      }
+
+      if (cashSummaryResponse.data.success) {
+        setCashSummary(cashSummaryResponse.data.data);
       }
     } catch (error) {
       console.error('Error loading earnings data:', error);
@@ -227,6 +235,28 @@ export default function EarningsScreen() {
 
       {/* Earnings Card */}
       {renderEarningsCard()}
+
+      {/* Cash Wallet Card */}
+      {cashSummary && cashSummary.cashInHand > 0 && (
+        <TouchableOpacity
+          style={styles.cashWalletCard}
+          onPress={() => router.push('/cash-collection' as any)}
+        >
+          <View style={styles.cashWalletHeader}>
+            <View>
+              <Text style={styles.cashWalletTitle}>Cash in Hand</Text>
+              <Text style={styles.cashWalletAmount}>Rs. {cashSummary.cashInHand.toFixed(2)}</Text>
+            </View>
+            <Ionicons name="cash" size={32} color="#FFD700" />
+          </View>
+          <View style={styles.cashWalletFooter}>
+            <Text style={styles.cashWalletSubtext}>
+              {cashSummary.pendingCollections} pending deposit{cashSummary.pendingCollections !== 1 ? 's' : ''}
+            </Text>
+            <Ionicons name="chevron-forward" size={20} color="#666" />
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* Stats Cards */}
       {renderStatsCards()}
@@ -436,5 +466,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 12,
+  },
+  cashWalletCard: {
+    backgroundColor: '#FFF8E1',
+    margin: 20,
+    marginTop: 0,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FFD700',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cashWalletHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cashWalletTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 4,
+  },
+  cashWalletAmount: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  cashWalletFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#FFE082',
+  },
+  cashWalletSubtext: {
+    fontSize: 12,
+    color: '#666',
   },
 });

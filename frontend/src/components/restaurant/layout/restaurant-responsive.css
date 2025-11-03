@@ -1,0 +1,260 @@
+/* Restaurant Portal Mobile Responsive Styles */
+
+/* Mobile First - Base styles for mobile */
+@media (max-width: 768px) {
+  /* Restaurant Layout Mobile Fixes */
+  .restaurant-layout {
+    overflow-x: hidden;
+  }
+
+  /* Sidebar Mobile Styles */
+  .restaurant-sidebar {
+    width: 280px;
+    max-width: 85vw;
+  }
+
+  /* Main Content Padding */
+  .restaurant-content {
+    padding: 1rem;
+  }
+
+  /* Header Mobile */
+  .restaurant-header {
+    padding: 0.75rem 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  /* Stat Cards - Stack on Mobile */
+  .restaurant-stat-card {
+    width: 100%;
+    margin-bottom: 1rem;
+    padding: 1rem;
+  }
+
+  /* Buttons - Touch Friendly */
+  .restaurant-btn {
+    min-height: 44px;
+    padding: 0.75rem 1rem;
+    font-size: 16px;
+  }
+
+  /* Forms - Full Width on Mobile */
+  .restaurant-form input,
+  .restaurant-form select,
+  .restaurant-form textarea {
+    width: 100%;
+    font-size: 16px; /* Prevents zoom on iOS */
+    padding: 0.75rem;
+  }
+
+  /* Tables - Convert to Cards on Mobile */
+  .restaurant-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Apply mobile table styles to all tables in restaurant portal */
+  table {
+    min-width: 100%;
+    border-collapse: collapse;
+  }
+
+  table thead {
+    display: none;
+  }
+
+  table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  table tr {
+    display: block;
+    margin-bottom: 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  table td {
+    display: block;
+    text-align: right;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #f3f4f6;
+    position: relative;
+    padding-left: 50%;
+  }
+
+  table td:before {
+    content: attr(data-label) ": ";
+    font-weight: 600;
+    position: absolute;
+    left: 0;
+    width: 45%;
+    text-align: left;
+    color: #495057;
+    text-transform: capitalize;
+  }
+
+  table td:last-child {
+    border-bottom: none;
+    text-align: right;
+  }
+
+  /* Order Cards Mobile */
+  .order-card {
+    width: 100%;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border-radius: 0.5rem;
+  }
+
+  /* Menu Items Grid - Single Column on Mobile */
+  .menu-items-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  /* Menu Item Cards */
+  .menu-item-card {
+    width: 100%;
+    padding: 1rem;
+  }
+
+  /* Filter Bar - Stack on Mobile */
+  .filter-bar {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .filter-bar > * {
+    width: 100%;
+  }
+
+  /* Action Buttons - Stack on Mobile */
+  .action-buttons {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .action-buttons > button {
+    width: 100%;
+  }
+
+  /* Modal Mobile */
+  .restaurant-modal {
+    width: 95vw;
+    max-width: 95vw;
+    margin: 1rem auto;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  /* Dashboard Stats - Stack */
+  .dashboard-stats {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  /* Ensure dashboard stat cards stack on mobile */
+  .grid.grid-cols-1,
+  .grid.md\\:grid-cols-2,
+  .grid.lg\\:grid-cols-4 {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Settings Tabs - Scrollable on Mobile */
+  .settings-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+  }
+
+  .settings-tab {
+    min-width: auto;
+    white-space: nowrap;
+  }
+
+  /* Chart Containers */
+  .chart-container {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  /* Hide less important elements on mobile */
+  .hide-mobile {
+    display: none !important;
+  }
+
+  /* Show mobile-only elements */
+  .show-mobile {
+    display: block !important;
+  }
+}
+
+/* Tablet Styles */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .restaurant-content {
+    padding: 1.5rem;
+  }
+
+  .menu-items-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+  }
+
+  .dashboard-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+  }
+}
+
+/* Desktop - Normal styles apply */
+@media (min-width: 1025px) {
+  .menu-items-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .dashboard-stats {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .show-mobile {
+    display: none !important;
+  }
+}
+
+/* Touch-friendly improvements */
+@media (hover: none) and (pointer: coarse) {
+  button,
+  a,
+  input[type="button"],
+  input[type="submit"],
+  .clickable {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Increase tap target size */
+  .icon-button {
+    padding: 0.75rem;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Prevent text overflow */
+.restaurant-content * {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Better scrolling on mobile */
+.restaurant-content {
+  -webkit-overflow-scrolling: touch;
+  overflow-x: hidden;
+}
+

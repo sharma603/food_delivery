@@ -4,6 +4,7 @@ import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 // Load environment variables
@@ -12,14 +13,43 @@ dotenv.config();
 import connectDB from './config/database.js';
 import errorHandler from './middleware/errorHandler.js';
 import { apiLimiter, superAdminLimiter, securityMiddleware } from './middleware/security.js';
+import mongoose from 'mongoose';
+import createSuperAdmin from '../scripts/create/createSuperAdmin.js';
 
-// Connect to database (optional for address API)
-try {
-  connectDB();
-} catch (error) {
-  console.log('⚠️  Database connection failed, but server will continue running for address API');
-  console.log('💡 Make sure MongoDB is running for full functionality');
-}
+// Connect to database and initialize SuperAdmin (one-time only)
+(async () => {
+  try {
+    await connectDB();
+    
+    // Wait for database connection to be ready, then create SuperAdmin if needed (only once)
+    const initializeSuperAdmin = async () => {
+      let attempts = 0;
+      const maxAttempts = 20; // Wait up to 10 seconds
+      
+      // Wait for database connection
+      while (mongoose.connection.readyState !== 1 && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        attempts++;
+      }
+      
+      if (mongoose.connection.readyState === 1) {
+        // This will only create SuperAdmin if none exists (one-time setup)
+        await createSuperAdmin();
+      } else {
+        console.warn('⚠️  Database not ready. SuperAdmin initialization will be skipped.');
+        console.warn('💡 You can manually run: node Backend/scripts/create/createSuperAdmin.js');
+      }
+    };
+    
+    // Small delay to ensure connection is fully established
+    setTimeout(initializeSuperAdmin, 1500);
+    
+  } catch (error) {
+    console.log('⚠️  Database connection failed, but server will continue running for address API');
+    console.log('💡 Make sure MongoDB is running for full functionality');
+    console.log('💡 You can manually run: node Backend/scripts/create/createSuperAdmin.js');
+  }
+})();
 
 const app = express();
 
@@ -105,10 +135,42 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
-// Static files
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
-app.use(express.static(path.join(__dirname, '../public')));
+// Static files - Use process.cwd() for consistent path resolution
+const uploadsPath = path.join(process.cwd(), 'uploads');
+const publicPath = path.join(process.cwd(), 'public');
+const adminPublicPath = path.join(process.cwd(), 'public', 'admin');
+
+// Ensure uploads directory exists
+if (!fs.existsSync(uploadsPath)) {
+  fs.mkdirSync(uploadsPath, { recursive: true });
+  console.log('✅ Created uploads directory:', uploadsPath);
+}
+
+// Serve static files
+app.use('/uploads', express.static(uploadsPath, {
+  setHeaders: (res, filePath) => {
+    // Set proper content type for images
+    if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+      res.setHeader('Content-Type', 'image/jpeg');
+    } else if (filePath.endsWith('.png')) {
+      res.setHeader('Content-Type', 'image/png');
+    } else if (filePath.endsWith('.webp')) {
+      res.setHeader('Content-Type', 'image/webp');
+    }
+    // Enable CORS for images
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+  }
+}));
+
+app.use('/admin', express.static(adminPublicPath));
+app.use(express.static(publicPath));
+
+// Log static file paths for debugging
+console.log('📁 Static file paths:');
+console.log('  - Uploads:', uploadsPath);
+console.log('  - Public:', publicPath);
+console.log('  - Admin:', adminPublicPath);
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
@@ -160,6 +222,9 @@ import restaurantStatusRoutes from './routes/restaurantStatus.js';
 
 // Address Routes
 import addressRoutes from './routes/address.js';
+
+// Debug Routes (only in development - uncomment when needed)
+// import debugRoutes from './routes/debug.js';
 
 // Swagger docs
 const swaggerSpec = swaggerJsdoc({
@@ -218,6 +283,11 @@ app.use('/api/v1/restaurant/status', restaurantStatusRoutes);
 
 // Address Routes
 app.use('/api/v1/address', addressRoutes);
+
+// Debug Routes (only in development or when enabled)
+// Uncomment to enable debug routes in production for troubleshooting
+// import debugRoutes from './routes/debug.js';
+// app.use('/api/debug', debugRoutes);
 
 // 404 handler
 app.all('*', (req, res) => {

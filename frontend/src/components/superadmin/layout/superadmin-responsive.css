@@ -1,0 +1,288 @@
+/* SuperAdmin Portal Mobile Responsive Styles */
+
+/* Mobile First - Base styles for mobile */
+@media (max-width: 768px) {
+  /* SuperAdmin Layout Mobile Fixes */
+  .superadmin-layout {
+    overflow-x: hidden;
+  }
+
+  /* Sidebar Mobile Styles (handled by common Sidebar.css, but ensuring proper layout) */
+  .superadmin-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    z-index: 50;
+  }
+
+  /* Main Content Padding */
+  .superadmin-content {
+    padding: 0.75rem;
+    width: 100%;
+  }
+
+  /* Header Mobile */
+  .superadmin-header {
+    padding: 0.75rem 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .superadmin-header .flex {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .superadmin-header .text-sm {
+    font-size: 0.75rem;
+  }
+
+  /* Dashboard Cards - Stack on Mobile */
+  .dashboard-stat-card {
+    width: 100%;
+    margin-bottom: 1rem;
+    padding: 1rem;
+  }
+
+  /* Dashboard Grid - Single Column on Mobile */
+  .dashboard-stats-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem;
+  }
+
+  /* Buttons - Touch Friendly */
+  .superadmin-btn {
+    min-height: 44px;
+    padding: 0.75rem 1rem;
+    font-size: 16px;
+  }
+
+  /* Forms - Full Width on Mobile */
+  .superadmin-form input,
+  .superadmin-form select,
+  .superadmin-form textarea {
+    width: 100%;
+    font-size: 16px; /* Prevents zoom on iOS */
+    padding: 0.75rem;
+  }
+
+  /* Tables - Convert to Cards on Mobile (if using common Table component) */
+  .superadmin-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Filter Bar - Stack on Mobile */
+  .filter-bar {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .filter-bar > * {
+    width: 100%;
+  }
+
+  /* Action Buttons - Stack on Mobile */
+  .action-buttons {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .action-buttons > button {
+    width: 100%;
+  }
+
+  /* Modal Mobile */
+  .superadmin-modal {
+    width: 95vw;
+    max-width: 95vw;
+    margin: 1rem auto;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  /* Dashboard Stats - Stack */
+  .dashboard-stats {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  /* Ensure dashboard stat cards stack on mobile */
+  .grid.grid-cols-1,
+  .grid.md\:grid-cols-2,
+  .grid.lg\:grid-cols-3,
+  .grid.lg\:grid-cols-4 {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Settings Tabs - Scrollable on Mobile */
+  .settings-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+  }
+
+  .settings-tab {
+    min-width: auto;
+    white-space: nowrap;
+    padding: 0.75rem 1rem;
+  }
+
+  /* Chart Containers */
+  .chart-container {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  /* Hide less important elements on mobile */
+  .hide-mobile {
+    display: none !important;
+  }
+
+  /* Show mobile-only elements */
+  .show-mobile {
+    display: block !important;
+  }
+
+  /* Top Bar User Info - Hide on Mobile if too long */
+  .user-info-mobile {
+    display: block;
+  }
+
+  .user-info-desktop {
+    display: none;
+  }
+
+  /* Dashboard Header Actions - Stack */
+  .dashboard-header-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  /* View Mode Toggle - Full Width on Mobile */
+  .view-mode-toggle {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .view-mode-toggle button {
+    flex: 1;
+  }
+}
+
+/* Tablet Styles */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .superadmin-content {
+    padding: 1.5rem;
+  }
+
+  .dashboard-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+  }
+
+  .user-info-mobile {
+    display: none;
+  }
+
+  .user-info-desktop {
+    display: block;
+  }
+}
+
+/* Desktop - Normal styles apply */
+@media (min-width: 1025px) {
+  .dashboard-stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .show-mobile {
+    display: none !important;
+  }
+
+  .user-info-mobile {
+    display: none;
+  }
+
+  .user-info-desktop {
+    display: block;
+  }
+}
+
+/* Touch-friendly improvements */
+@media (hover: none) and (pointer: coarse) {
+  button,
+  a,
+  input[type="button"],
+  input[type="submit"],
+  .clickable {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Increase tap target size */
+  .icon-button {
+    padding: 0.75rem;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Prevent text overflow */
+.superadmin-content * {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Better scrolling on mobile */
+.superadmin-content {
+  -webkit-overflow-scrolling: touch;
+  overflow-x: hidden;
+}
+
+/* Mobile Menu Button Enhancement */
+.mobile-menu-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mobile-menu-button:hover {
+  background: #f3f4f6;
+}
+
+/* Responsive padding utilities */
+@media (max-width: 768px) {
+  .px-6 {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .py-4 {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+
+  .mx-6 {
+    margin-left: 1rem;
+    margin-right: 1rem;
+  }
+
+  .space-x-4 > * + * {
+    margin-left: 0;
+    margin-top: 0.5rem;
+  }
+}
+

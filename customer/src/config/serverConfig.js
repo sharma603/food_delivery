@@ -6,7 +6,8 @@ export const SERVER_CONFIG = {
   // For local development: 'localhost' or '127.0.0.1'
   // For physical devices: Your computer's IP address (e.g., '192.168.18.38')
   // For Android emulator: '10.0.2.2'
-  IP: '192.168.18.38',
+  // For production/VPS: '72.60.206.253'
+  IP: '72.60.206.253',
   
   // Server Port
   PORT: '5000',

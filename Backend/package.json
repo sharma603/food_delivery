@@ -6,14 +6,24 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "start:prod": "NODE_ENV=production node scripts/start-production.js",
+    "start:prod": "NODE_ENV=production node scripts/deploy/start-production.js",
     "dev": "nodemon server.js",
     "build": "echo \"No build step required\"",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "test:delivery": "node scripts/testDeliveryCreation.js",
-    "check:cash": "node scripts/checkDeliveryPersonCash.js",
-    "backfill:cash": "node scripts/backfillCashCollections.js"
+    "check:db": "node scripts/check/checkDatabaseStatus.js",
+    "check:health": "node scripts/check/health-check.js",
+    "check:login": "node scripts/check/verifyDeliveryLogin.js",
+    "create:admin": "node scripts/create/createSuperAdmin.js",
+    "fix:restaurant": "node scripts/fix/unlockRestaurantAccount.js",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop food-delivery-backend",
+    "pm2:restart": "pm2 restart food-delivery-backend",
+    "pm2:delete": "pm2 delete food-delivery-backend",
+    "pm2:logs": "pm2 logs food-delivery-backend",
+    "pm2:status": "pm2 status",
+    "pm2:save": "pm2 save",
+    "pm2:setup": "pm2 startup && pm2 save"
   },
   "keywords": [
     "food-delivery",

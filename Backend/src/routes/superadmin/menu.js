@@ -88,7 +88,7 @@ router.get('/:id', getMenuItem);
 // @route   PUT /api/v1/superadmin/menu/:id
 // @desc    Update menu item
 // @access  Private (SuperAdmin)
-router.put('/:id', updateMenuItem);
+router.put('/:id', menuUpload.array('images', 5), updateMenuItem);
 
 // @route   DELETE /api/v1/superadmin/menu/:id
 // @desc    Delete menu item

@@ -2,6 +2,8 @@ import jwt from 'jsonwebtoken';
 import RestaurantUser from '../models/RestaurantUser.js';
 import Restaurant from '../models/Restaurant.js';
 import RestaurantStatus from '../models/RestaurantStatus.js';
+import OTP from '../models/OTP.js';
+import { sendEmail } from '../services/emailService.js';
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -682,6 +684,284 @@ export const toggleRestaurantStatus = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error toggling status',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// @desc    Forgot password with OTP for restaurant
+// @route   POST /api/v1/restaurant/auth/forgot-password
+// @access  Public
+export const restaurantForgotPassword = async (req, res) => {
+  try {
+    console.log('🔓 Forgot Password Route Hit - Public route, no auth required');
+    console.log('Request headers:', {
+      authorization: req.headers.authorization ? 'Present' : 'Not present',
+      contentType: req.headers['content-type']
+    });
+    
+    const { email } = req.body;
+
+    // Validation
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide your email address'
+      });
+    }
+
+    // Find restaurant by email
+    const restaurant = await RestaurantUser.findOne({ 
+      email: email.toLowerCase().trim()
+    });
+
+    if (!restaurant) {
+      // Don't reveal if email exists or not for security
+      return res.status(200).json({
+        success: true,
+        message: 'If an account exists with this email, an OTP has been sent. Please check your inbox.',
+        data: {
+          email: email.toLowerCase().trim(),
+          expiresIn: '5 minutes'
+        }
+      });
+    }
+
+    // Check if restaurant is active (optional - you may want to allow password reset for inactive accounts)
+    // if (!restaurant.isActive) {
+    //   return res.status(403).json({
+    //     success: false,
+    //     message: 'Account has been deactivated. Please contact support.'
+    //   });
+    // }
+
+    // Get client IP and user agent
+    const ipAddress = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
+    const userAgent = req.headers['user-agent'];
+
+    // Create OTP request
+    const otpRequest = await OTP.createOTPRequest(
+      restaurant._id,
+      'Restaurant',
+      restaurant.email,
+      ipAddress,
+      userAgent
+    );
+
+    // Send OTP email
+    try {
+      await sendEmail({
+        to: restaurant.email,
+        template: 'password-reset-otp',
+        data: {
+          name: restaurant.ownerName || restaurant.restaurantName,
+          email: restaurant.email,
+          otp: otpRequest.otp
+        }
+      });
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      // Don't fail the request if email fails - log it
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'OTP has been sent to your email address. Please check your inbox.',
+      data: {
+        email: restaurant.email,
+        expiresIn: '5 minutes'
+      }
+    });
+
+  } catch (error) {
+    console.error('Restaurant forgot password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process forgot password request',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// @desc    Verify OTP for password reset for restaurant
+// @route   POST /api/v1/restaurant/auth/verify-otp
+// @access  Public
+export const restaurantVerifyOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    // Validation
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide email and OTP'
+      });
+    }
+
+    // Find valid OTP
+    const otpRecord = await OTP.findOne({
+      email: email.toLowerCase().trim(),
+      otp: otp.trim(),
+      userType: 'Restaurant',
+      isUsed: false,
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (!otpRecord) {
+      // Check if OTP exists but is expired or used
+      const expiredOTP = await OTP.findOne({
+        email: email.toLowerCase().trim(),
+        otp: otp.trim(),
+        userType: 'Restaurant'
+      });
+
+      if (expiredOTP) {
+        if (expiredOTP.isUsed) {
+          return res.status(400).json({
+            success: false,
+            message: 'OTP has already been used. Please request a new OTP.'
+          });
+        }
+        
+        if (expiredOTP.expiresAt <= new Date()) {
+          return res.status(400).json({
+            success: false,
+            message: 'OTP has expired. Please request a new OTP.'
+          });
+        }
+        
+        if (expiredOTP.attempts >= 3) {
+          return res.status(400).json({
+            success: false,
+            message: 'Maximum attempts exceeded. Please request a new OTP.'
+          });
+        }
+      }
+
+      // Increment attempts for invalid OTP
+      if (expiredOTP) {
+        await expiredOTP.incrementAttempts();
+      }
+
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid OTP. Please check and try again.'
+      });
+    }
+
+    // Check attempts limit
+    if (otpRecord.attempts >= 3) {
+      return res.status(400).json({
+        success: false,
+        message: 'Maximum attempts exceeded. Please request a new OTP.'
+      });
+    }
+
+    // Mark OTP as used
+    await otpRecord.markAsUsed();
+
+    res.status(200).json({
+      success: true,
+      message: 'OTP verified successfully. You can now set a new password.',
+      data: {
+        email: email.toLowerCase().trim(),
+        verified: true
+      }
+    });
+
+  } catch (error) {
+    console.error('Restaurant verify OTP error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to verify OTP',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// @desc    Reset password with OTP verification for restaurant
+// @route   POST /api/v1/restaurant/auth/reset-password
+// @access  Public
+export const restaurantResetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    // Validation
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide email, OTP, and new password'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long'
+      });
+    }
+
+    // Verify OTP - find valid OTP that has been verified (marked as used during verification)
+    const otpRecord = await OTP.findOne({
+      email: email.toLowerCase().trim(),
+      otp: otp.trim(),
+      userType: 'Restaurant',
+      isUsed: true,  // OTP must be verified (used) before resetting password
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (!otpRecord) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid, expired, or unverified OTP. Please verify OTP first.'
+      });
+    }
+
+    // Find restaurant - need to select password field
+    const restaurant = await RestaurantUser.findOne({ 
+      email: email.toLowerCase().trim()
+    }).select('+password');
+
+    if (!restaurant) {
+      return res.status(404).json({
+        success: false,
+        message: 'Restaurant not found'
+      });
+    }
+
+    // Update password - set plain password to trigger pre-save hook to hash it
+    restaurant.password = newPassword;
+    restaurant.markModified('password'); // Ensure the password field is marked as modified
+    await restaurant.save();
+
+    // Send success email
+    try {
+      await sendEmail({
+        to: restaurant.email,
+        template: 'password-reset-success',
+        data: {
+          name: restaurant.ownerName || restaurant.restaurantName,
+          email: restaurant.email
+        }
+      });
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successfully. You can now login with your new password.',
+      data: {
+        email: restaurant.email
+      }
+    });
+
+  } catch (error) {
+    console.error('Restaurant reset password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reset password',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

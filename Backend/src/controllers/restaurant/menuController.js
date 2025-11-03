@@ -19,7 +19,11 @@ export const getRestaurantMenuItems = asyncHandler(async (req, res) => {
     if (restaurant) {
       // First try to find menu items linked to the RestaurantUser ID
       menuItems = await MenuItem.find({ restaurant: req.user._id })
-        .populate('category', 'name displayName')
+        .populate({
+          path: 'category',
+          select: 'name displayName',
+          match: { isDeleted: { $ne: true } } // Only populate if category is not deleted
+        })
         .sort({ sortOrder: 1, name: 1 });
       
       // If no items found, try to find items linked to the Restaurant model ID
@@ -27,7 +31,11 @@ export const getRestaurantMenuItems = asyncHandler(async (req, res) => {
         const restaurantDoc = await Restaurant.findOne({ owner: req.user._id });
         if (restaurantDoc) {
           menuItems = await MenuItem.find({ restaurant: restaurantDoc._id })
-            .populate('category', 'name displayName')
+            .populate({
+              path: 'category',
+              select: 'name displayName',
+              match: { isDeleted: { $ne: true } } // Only populate if category is not deleted
+            })
             .sort({ sortOrder: 1, name: 1 });
         }
       }
@@ -114,8 +122,16 @@ export const getRestaurantMenuItems = asyncHandler(async (req, res) => {
       calories: item.calories || null,
       discount: item.discount || 0,
       tags: item.tags || [],
-      category: item.category?.name || 'Uncategorized',
-      categoryId: item.category?._id,
+      category: (item.category && typeof item.category === 'object' && item.category.name) 
+        ? item.category.name 
+        : (item.category && typeof item.category === 'object' && item.category.displayName)
+        ? item.category.displayName
+        : (typeof item.category === 'string' && item.category.match(/^[0-9a-fA-F]{24}$/))
+        ? 'Uncategorized' // Hide ObjectId strings
+        : 'Uncategorized',
+      categoryId: (item.category && typeof item.category === 'object' && item.category._id) 
+        ? item.category._id 
+        : null,
       customizations: item.customizations || [],
       orderCount: 0, // Default value
       rating: 0, // Default value
@@ -346,11 +362,37 @@ export const updateMenuItem = asyncHandler(async (req, res) => {
       });
     }
 
+    // Handle file uploads - Delete old images if new ones are uploaded
+    if (req.files && req.files.length > 0) {
+      // Import file utility to delete old images
+      const { deleteMultipleImageFiles } = await import('../../utils/fileUtils.js');
+      
+      // Delete old images before adding new ones
+      if (menuItem.images && Array.isArray(menuItem.images) && menuItem.images.length > 0) {
+        try {
+          const { deleted, failed } = await deleteMultipleImageFiles(menuItem.images);
+          console.log(`Deleted ${deleted} old image(s) for menu item ${itemId}. Failed: ${failed}`);
+        } catch (fileError) {
+          console.error('Error deleting old image files:', fileError.message);
+          // Continue with update even if old file deletion fails
+        }
+      }
+      
+      // Update with new image URLs
+      const imageUrls = req.files.map(file => `/uploads/menu-items/${file.filename}`);
+      menuItem.images = imageUrls;
+    } else if (image !== undefined) {
+      // Handle string image URL (for compatibility with existing code)
+      menuItem.images = image ? [image] : [];
+    } else if (req.body.images !== undefined) {
+      // Handle images array from request body
+      menuItem.images = Array.isArray(req.body.images) ? req.body.images : [];
+    }
+
     // Update item fields
     if (name !== undefined) menuItem.name = name;
     if (description !== undefined) menuItem.description = description;
     if (price !== undefined) menuItem.price = parseFloat(price);
-    if (image !== undefined) menuItem.images = image ? [image] : [];
     if (ingredients !== undefined) menuItem.tags = ingredients;
     if (isVeg !== undefined) menuItem.isVegetarian = isVeg;
     if (isAvailable !== undefined) menuItem.isAvailable = isAvailable;
@@ -394,8 +436,16 @@ export const updateMenuItem = asyncHandler(async (req, res) => {
         ingredients: updatedItem.tags || [],
         isVegetarian: updatedItem.isVegetarian,
         isAvailable: updatedItem.isAvailable,
-        category: updatedItem.category?.name || category,
-        categoryId: updatedItem.category?._id,
+        category: (updatedItem.category && typeof updatedItem.category === 'object' && updatedItem.category.name) 
+          ? updatedItem.category.name 
+          : (updatedItem.category && typeof updatedItem.category === 'object' && updatedItem.category.displayName)
+          ? updatedItem.category.displayName
+          : (typeof category === 'string' && !category.match(/^[0-9a-fA-F]{24}$/))
+          ? category
+          : 'Uncategorized',
+        categoryId: (updatedItem.category && typeof updatedItem.category === 'object' && updatedItem.category._id) 
+          ? updatedItem.category._id 
+          : null,
         isActive: updatedItem.isActive,
         createdAt: updatedItem.createdAt,
         updatedAt: updatedItem.updatedAt
@@ -429,17 +479,17 @@ export const deleteMenuItem = asyncHandler(async (req, res) => {
 
     const { itemId } = req.params;
 
-    // Find and delete the menu item (check both RestaurantUser ID and Restaurant ID)
-    let menuItem = await MenuItem.findOneAndDelete({ 
+    // Find the menu item first (before deleting) to get image paths
+    let menuItem = await MenuItem.findOne({ 
       _id: itemId, 
       restaurant: req.user._id 
     });
     
-    // If not found, try to find and delete by Restaurant model ID
+    // If not found, try to find by Restaurant model ID
     if (!menuItem) {
       const restaurantDoc = await Restaurant.findOne({ owner: req.user._id });
       if (restaurantDoc) {
-        menuItem = await MenuItem.findOneAndDelete({ 
+        menuItem = await MenuItem.findOne({ 
           _id: itemId, 
           restaurant: restaurantDoc._id 
         });
@@ -452,6 +502,31 @@ export const deleteMenuItem = asyncHandler(async (req, res) => {
         message: 'Menu item not found'
       });
     }
+
+    // Import file utility function
+    const { deleteMultipleImageFiles } = await import('../../utils/fileUtils.js');
+
+    // Delete associated image files before deleting the menu item
+    if (menuItem.images && Array.isArray(menuItem.images) && menuItem.images.length > 0) {
+      try {
+        const { deleted, failed } = await deleteMultipleImageFiles(menuItem.images);
+        console.log(`Deleted ${deleted} image(s) for menu item ${itemId}. Failed: ${failed}`);
+        
+        // Log warning if some files failed to delete (but don't block deletion)
+        if (failed > 0) {
+          console.warn(`Warning: ${failed} image file(s) could not be deleted for menu item ${itemId}`);
+        }
+      } catch (fileError) {
+        // Log error but don't block menu item deletion
+        console.error('Error deleting image files:', fileError.message);
+      }
+    }
+
+    // Now delete the menu item from database
+    await MenuItem.findOneAndDelete({ 
+      _id: itemId, 
+      restaurant: menuItem.restaurant 
+    });
 
     res.status(200).json({
       success: true,

@@ -24,11 +24,18 @@ coverage/
 Thumbs.db
 
 # Android build files
+customer
 customer/.gradle/
 customer/build/
 customer/local.properties
 customer/.idea/
 customer/.cxx/
+delivery
+delivery/.gradle/
+delivery/build/
+delivery/local.properties
+delivery/.idea/
+delivery/.cxx/
 
 # Misc
 *.lock
