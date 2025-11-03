@@ -23,19 +23,14 @@ coverage/
 .DS_Store
 Thumbs.db
 
-# Android build files
-customer
-customer/.gradle/
-customer/build/
-customer/local.properties
-customer/.idea/
-customer/.cxx/
-delivery
-delivery/.gradle/
-delivery/build/
-delivery/local.properties
-delivery/.idea/
-delivery/.cxx/
+# Android build files - Ignore entire customer and delivery folders
+customer/
+Customer/
+delivery/
+Delivery/
 
+# VPS_IMAGE_FIX_GUIDE
+VPS_IMAGE_FIX_GUIDE.md/
+Food_Delivery_API.postman_collection.json/
 # Misc
 *.lock
